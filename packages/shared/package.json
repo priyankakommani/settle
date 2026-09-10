@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./http": "./src/http-status.ts",
-    "./errors": "./src/error-codes.ts"
+    ".": "./dist/index.js",
+    "./http": "./dist/http-status.js",
+    "./errors": "./dist/error-codes.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
