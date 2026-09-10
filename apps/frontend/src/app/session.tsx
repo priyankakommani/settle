@@ -69,20 +69,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (creds: Credentials) => {
-      const { user } = await authApi.login(creds);
+      const res = await authApi.login(creds);
+      if (res.token) {
+        try { localStorage.setItem('settle.token', res.token); } catch {}
+      }
       wipeCache();
-      setState({ status: 'signed-in', user, error: null });
-      return user;
+      setState({ status: 'signed-in', user: res.user, error: null });
+      return res.user;
     },
     [wipeCache],
   );
 
   const signUp = useCallback(
     async (creds: Credentials) => {
-      const { user } = await authApi.signup(creds);
+      const res = await authApi.signup(creds);
+      if (res.token) {
+        try { localStorage.setItem('settle.token', res.token); } catch {}
+      }
       wipeCache();
-      setState({ status: 'signed-in', user, error: null });
-      return user;
+      setState({ status: 'signed-in', user: res.user, error: null });
+      return res.user;
     },
     [wipeCache],
   );
@@ -91,6 +97,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       await authApi.logout();
     } finally {
+      try { localStorage.removeItem('settle.token'); } catch {}
       wipeCache();
       setState({ status: 'signed-out', user: null, error: null });
     }

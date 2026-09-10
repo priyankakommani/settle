@@ -10,7 +10,7 @@ import { loginSchema, signupSchema } from '../validators/auth.validators.js';
 function setSessionCookie(c: Context, result: AuthResult) {
   setCookie(c, env.SESSION_COOKIE, result.token, {
     httpOnly: true,
-    sameSite: 'Lax',
+    sameSite: isProd ? 'None' : 'Lax',
     secure: isProd,
     path: '/',
     maxAge: env.SESSION_TTL_SECONDS,

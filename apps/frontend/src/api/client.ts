@@ -47,6 +47,15 @@ interface RequestOptions {
 export async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
 
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('settle.token') : null;
+    if (token) {
+      headers['authorization'] = `Bearer ${token}`;
+    }
+  } catch {
+    /* ignore localStorage restriction */
+  }
+
   let body: BodyInit | undefined;
   if (opts.form) {
     body = opts.form;
