@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useSession } from '../app/session.js';
 import { homePathFor } from '../app/roles.js';
 import { ApiError } from '../api/client.js';
@@ -9,7 +9,6 @@ import { AuthCard } from './auth/AuthCard.js';
 
 export function SignInPage() {
   const { status, user, signIn } = useSession();
-  const location = useLocation();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -18,8 +17,7 @@ export function SignInPage() {
   const [busy, setBusy] = useState(false);
 
   if (status === 'signed-in' && user) {
-    const dest = (location.state as { from?: string } | null)?.from ?? homePathFor(user.role);
-    return <Navigate to={dest} replace />;
+    return <Navigate to={homePathFor(user.role)} replace />;
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -28,8 +26,7 @@ export function SignInPage() {
     setBusy(true);
     try {
       const me = await signIn({ email: email.trim(), password });
-      const dest = (location.state as { from?: string } | null)?.from ?? homePathFor(me.role);
-      navigate(dest, { replace: true });
+      navigate(homePathFor(me.role), { replace: true });
     } catch (err) {
       setError(
         err instanceof ApiError

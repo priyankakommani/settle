@@ -1,17 +1,20 @@
 import type { ReactNode } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useSession } from './session.js';
 import { allowedAreasFor, homePathFor, type NavArea } from './roles.js';
 import { SkeletonRows } from '../ui/primitives.js';
 
 /**
  * Gate for every in-app route. While the session resolves we show a calm
- * placeholder; if there's no session we bounce to /signin (remembering where
- * the user was headed).
+ * placeholder; if there's no session we bounce to /signin.
+ *
+ * We deliberately do NOT remember the attempted URL: the next sign-in may be a
+ * different user (people switch roles here constantly) and sending them to the
+ * previous user's deep link produces 403/404s on a resource they can't see.
+ * Everyone lands on their own role home after signing in.
  */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useSession();
-  const location = useLocation();
 
   if (status === 'loading') {
     return (
@@ -23,7 +26,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
   if (status === 'signed-out') {
-    return <Navigate to="/signin" replace state={{ from: location.pathname + location.search }} />;
+    return <Navigate to="/signin" replace />;
   }
   return <>{children}</>;
 }
