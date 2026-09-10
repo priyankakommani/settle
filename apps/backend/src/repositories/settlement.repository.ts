@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { settlements, type NewSettlement, type Settlement } from '../db/schema/index.js';
 import { mapDbError } from '../lib/db-error.js';
@@ -29,6 +29,16 @@ export const settlementRepository = {
         .where(eq(settlements.tripId, tripId))
         .limit(1);
       return rows[0] ?? null;
+    } catch (err) {
+      throw mapDbError(err);
+    }
+  },
+
+  /** Batch lookup for queue read models — one query for many trips. */
+  async listByTripIds(tripIds: string[]): Promise<Settlement[]> {
+    if (tripIds.length === 0) return [];
+    try {
+      return await db.select().from(settlements).where(inArray(settlements.tripId, tripIds));
     } catch (err) {
       throw mapDbError(err);
     }

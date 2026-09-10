@@ -9,7 +9,10 @@ import * as schema from './schema/index.js';
  * Import `{ db }` anywhere in the data layer; never construct another client.
  */
 const queryClient = postgres(env.DATABASE_URL, {
-  max: isTest ? 1 : 10,
+  // Small managed Postgres instances (e.g. Render's free tier) cap total
+  // connections around ~20 and are shared with migrate jobs / studio, so keep
+  // the pool conservative. Override with DB_POOL_MAX if a bigger instance is used.
+  max: isTest ? 1 : env.DB_POOL_MAX,
   ssl: dbSsl,
   onnotice: (n) => logger.debug({ notice: n }, 'pg.notice'),
 });

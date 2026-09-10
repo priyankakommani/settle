@@ -13,6 +13,9 @@ const EnvSchema = z.object({
   // disable -> no TLS | require -> TLS without CA verification | verify -> TLS + CA verification
   // Unset: inferred from the host (localhost -> disable, anything else -> require).
   DATABASE_SSL: z.enum(['disable', 'require', 'verify']).optional(),
+  // Max connections in the shared pool. Default 5 — safe for small managed
+  // instances; raise it when the database can take more.
+  DB_POOL_MAX: z.coerce.number().int().positive().max(50).default(5),
   CORS_ORIGINS: z
     .string()
     .default('http://localhost:5173')
