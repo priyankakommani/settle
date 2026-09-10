@@ -56,17 +56,26 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
     /* ignore localStorage restriction */
   }
 
+  const method = opts.method ?? (opts.body !== undefined || opts.form ? 'POST' : 'GET');
+
   let body: BodyInit | undefined;
   if (opts.form) {
     body = opts.form;
   } else if (opts.body !== undefined) {
     headers['content-type'] = 'application/json';
     body = JSON.stringify(opts.body);
+  } else if (method === 'DELETE') {
+    // Render's edge proxy strips Authorization/Cookie from a body-less DELETE,
+    // which makes the API see the request as unauthenticated. Sending an empty
+    // JSON body keeps the credential headers intact. The DELETE endpoints
+    // ignore the body (they validate params only).
+    headers['content-type'] = 'application/json';
+    body = '{}';
   }
 
   const baseUrl = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
   const res = await fetch(`${baseUrl}/api${path}`, {
-    method: opts.method ?? (body ? 'POST' : 'GET'),
+    method,
     headers,
     body,
     credentials: 'include',
