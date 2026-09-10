@@ -4,11 +4,23 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
+  "module": "./src/index.ts",
+  "source": "./src/index.ts",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
-    "./http": "./dist/http-status.js",
-    "./errors": "./dist/error-codes.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./src/index.ts"
+    },
+    "./http": {
+      "import": "./dist/http-status.js",
+      "default": "./src/http-status.ts"
+    },
+    "./errors": {
+      "import": "./dist/error-codes.js",
+      "default": "./src/error-codes.ts"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
