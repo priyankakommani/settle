@@ -1076,16 +1076,79 @@
 /* ---- auth (sign in / sign up) ---------------------- */
 .auth {
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+}
+
+/* left: what Settle does */
+.auth__aside {
+  position: relative;
+  overflow: hidden;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-4);
-  padding: clamp(24px, 6vh, 72px) var(--sp-5);
+  padding: var(--sp-10) var(--sp-8);
+  color: #fff;
+  background: #14532d;
+  background-image: radial-gradient(
+    120% 90% at 0% 0%,
+    rgba(255, 255, 255, 0.10) 0%,
+    rgba(255, 255, 255, 0) 55%
+  );
+}
+.auth__aside-inner { width: 100%; max-width: 440px; }
+.auth__brand--light { color: #fff; margin-bottom: var(--sp-8); }
+.auth__brand--light .nav__brand-mark {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.auth__pitch {
+  font-size: var(--fs-28);
+  line-height: 1.2;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--sp-3);
+}
+.auth__pitch-sub {
+  font-size: var(--fs-14);
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.82);
+  margin-bottom: var(--sp-8);
+}
+.auth__flow { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
+.auth__flow-step { display: flex; gap: var(--sp-3); align-items: flex-start; }
+.auth__flow-num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: var(--fs-12);
+  font-weight: 700;
+}
+.auth__flow-text { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-13); }
+.auth__flow-text strong { font-weight: 620; }
+.auth__flow-text span { color: rgba(255, 255, 255, 0.78); line-height: 1.5; }
+.auth__aside-foot {
+  margin-top: var(--sp-8);
+  font-size: var(--fs-12);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* right: the form */
+.auth__main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(24px, 6vh, 64px) var(--sp-6);
+  background: var(--bg);
 }
 .auth__card {
   width: 100%;
-  max-width: 420px;
+  max-width: 400px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1098,49 +1161,25 @@
   gap: var(--sp-3);
   font-size: var(--fs-16);
   font-weight: 680;
-  margin-bottom: var(--sp-5);
 }
+.auth__brand--compact { display: none; margin-bottom: var(--sp-5); }
 .auth__title { font-size: var(--fs-22); margin-bottom: var(--sp-1); }
 .auth__subtitle { color: var(--text-muted); font-size: var(--fs-13); margin-bottom: var(--sp-6); }
 .auth__form { display: flex; flex-direction: column; gap: var(--sp-4); }
 .auth__form .btn { margin-top: var(--sp-1); }
-.auth__footer { font-size: var(--fs-13); color: var(--text-muted); }
-.auth__hint {
-  margin-top: var(--sp-6);
+.auth__footer {
+  margin-top: var(--sp-5);
   padding-top: var(--sp-4);
   border-top: 1px solid var(--border);
-  font-size: var(--fs-12);
-  color: var(--text-subtle);
-}
-.auth__hint code {
-  background: var(--surface-2);
-  padding: 1px 5px;
-  border-radius: 4px;
+  font-size: var(--fs-13);
   color: var(--text-muted);
 }
-.auth__roster { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-3); }
-.auth__roster-label {
-  font-size: var(--fs-11);
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-subtle);
-  margin-bottom: var(--sp-2);
+
+@media (max-width: 900px) {
+  .auth { grid-template-columns: 1fr; }
+  .auth__aside { display: none; }
+  .auth__brand--compact { display: flex; }
 }
-.auth__chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-.chip {
-  appearance: none;
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text-muted);
-  font: inherit;
-  font-size: var(--fs-12);
-  font-weight: 530;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-}
-.chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 
 /* ---- documents list ---------------------------- */
 .doc-list {
