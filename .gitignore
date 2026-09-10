@@ -37,3 +37,7 @@ apps/backend/drizzle/meta/_journal.bak
 /extracted/
 /scratch/
 /expense_reimbursement_takehome.zip
+
+# supplied take-home problem pack — kept local only, never committed.
+# Drop the original pack into apps/backend/seed-data/pack/ before `pnpm db:seed`.
+apps/backend/seed-data/pack/
