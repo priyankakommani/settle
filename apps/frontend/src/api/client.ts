@@ -55,7 +55,8 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
     body = JSON.stringify(opts.body);
   }
 
-  const res = await fetch(`/api${path}`, {
+  const baseUrl = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+  const res = await fetch(`${baseUrl}/api${path}`, {
     method: opts.method ?? (body ? 'POST' : 'GET'),
     headers,
     body,
