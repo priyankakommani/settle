@@ -42,3 +42,6 @@ apps/backend/drizzle/meta/_journal.bak
 # Drop the original pack into apps/backend/seed-data/pack/ before `pnpm db:seed`.
 apps/backend/seed-data/pack/
 apps/backend/seed-data
+submission_note.md
+submission_note.pdf
+
