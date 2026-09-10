@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useSession } from '../app/session.js';
 import { homePathFor } from '../app/roles.js';
-import { DEMO_GROUPS, DEMO_PASSWORD, DEMO_USERS } from '../app/demo-users.js';
 import { ApiError } from '../api/client.js';
 import { Button, Notice } from '../ui/primitives.js';
 import { Field, Input, PasswordInput } from '../ui/form.js';
@@ -40,12 +39,6 @@ export function SignInPage() {
     } finally {
       setBusy(false);
     }
-  };
-
-  const quickFill = (userEmail: string) => {
-    setEmail(userEmail);
-    setPassword(DEMO_PASSWORD);
-    setError(null);
   };
 
   return (
@@ -102,34 +95,6 @@ export function SignInPage() {
           {busy ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
-
-      <div className="auth__hint">
-        Demo roster — password is <code>{DEMO_PASSWORD}</code>. Click a name to fill the form:
-      </div>
-      <div className="auth__roster">
-        {DEMO_GROUPS.map((group) => {
-          const people = DEMO_USERS.filter((u) => group.roles.includes(u.role));
-          if (people.length === 0) return null;
-          return (
-            <div key={group.label} className="auth__roster-group">
-              <div className="auth__roster-label">{group.label}</div>
-              <div className="auth__chips">
-                {people.map((p) => (
-                  <button
-                    key={p.empCode}
-                    type="button"
-                    className="chip"
-                    onClick={() => quickFill(p.email)}
-                    title={`${p.designation} · ${p.role}`}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </AuthCard>
   );
 }
