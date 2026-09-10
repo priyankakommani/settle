@@ -41,3 +41,4 @@ apps/backend/drizzle/meta/_journal.bak
 # supplied take-home problem pack — kept local only, never committed.
 # Drop the original pack into apps/backend/seed-data/pack/ before `pnpm db:seed`.
 apps/backend/seed-data/pack/
+apps/backend/seed-data
