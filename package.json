@@ -1,0 +1,30 @@
+{
+  "name": "settle",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Travel Expense Reimbursement system for Nortex Industries (take-home).",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:backend": "pnpm --filter @settle/backend dev",
+    "dev:frontend": "pnpm --filter @settle/frontend dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @settle/backend db:generate",
+    "db:migrate": "pnpm --filter @settle/backend db:migrate",
+    "db:seed": "pnpm --filter @settle/backend db:seed",
+    "db:studio": "pnpm --filter @settle/backend db:studio",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  }
+}

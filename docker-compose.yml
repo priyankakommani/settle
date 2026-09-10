@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: settle-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-settle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-settle}
+      POSTGRES_DB: ${POSTGRES_DB:-settle}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - settle-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-settle} -d ${POSTGRES_DB:-settle}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  settle-db-data:

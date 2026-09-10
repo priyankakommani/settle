@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789017212590,
+      "tag": "0000_clammy_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789027680337,
+      "tag": "0001_flat_gunslinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789030455067,
+      "tag": "0002_lyrical_karen_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789031362051,
+      "tag": "0003_warm_the_watchers",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789034034873,
+      "tag": "0004_spooky_the_initiative",
+      "breakpoints": true
+    }
+  ]
+}
