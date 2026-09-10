@@ -6,16 +6,15 @@ const KEY = 'settle.theme';
 function read(): Theme {
   try {
     const v = localStorage.getItem(KEY);
-    return v === 'light' || v === 'dark' ? v : 'system';
+    return v === 'light' || v === 'dark' ? v : 'light';
   } catch {
-    return 'system';
+    return 'light';
   }
 }
 
 function apply(theme: Theme) {
   const root = document.documentElement;
-  if (theme === 'system') root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', theme);
+  root.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
 }
 
 /** Three-state theme: light / dark / follow-OS. Persisted per browser. */
