@@ -9,6 +9,7 @@ import { requestLogger } from './middleware/request-logger.js';
 import { onError, onNotFound } from './middleware/error-handler.js';
 import { PayloadTooLargeError } from './lib/errors.js';
 import { api } from './routes/index.js';
+import { ok } from './lib/response.js';
 
 /**
  * Assembles the HTTP app. This is the "index" that owns cross-cutting
@@ -44,6 +45,12 @@ export function createApp() {
         throw new PayloadTooLargeError(`Upload exceeds ${MAX_UPLOAD_BYTES} bytes.`);
       },
     }),
+  );
+
+  // service banner for anyone hitting the bare host — this is an API-only
+  // server, so this is the only non-/api route
+  app.get('/', (c) =>
+    ok(c, { service: 'settle-api', status: 'ok', health: '/api/health/live' }),
   );
 
   app.route('/api', api);
