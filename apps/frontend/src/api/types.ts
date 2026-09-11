@@ -98,14 +98,29 @@ export interface TripSummary {
   createdAt: string;
 }
 
+export interface TripDocumentAttachment {
+  id: string;
+  filename: string;
+  mime: string;
+  sizeBytes: number | null;
+  ocrText: string | null;
+  ocrStatus: 'pending' | 'done' | 'failed' | 'skipped' | string;
+  createdAt: string;
+}
+
 export interface TripDocument {
   id: string;
+  sourceType: 'eml' | 'image' | 'manual';
   category: DocumentCategoryValue;
+  categoryConfidence: string | null;
   subject: string | null;
   fromAddr: string | null;
+  messageId: string | null;
   sentAt: string | null;
+  createdAt: string;
   isNoise: boolean;
   isDuplicateOf: string | null;
+  attachments: TripDocumentAttachment[];
 }
 
 export interface ClaimLine {

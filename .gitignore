@@ -33,6 +33,9 @@ coverage/
 # drizzle throwaway
 apps/backend/drizzle/meta/_journal.bak
 
+# tesseract.js downloads its language model into the cwd on first OCR run
+*.traineddata
+
 # local scratch
 /extracted/
 /scratch/

@@ -29,12 +29,28 @@ export const tripService = {
   /** Full aggregate for the trip-review screen. */
   async getDetail(id: string) {
     const trip = await this.getByIdOrThrow(id);
-    const [documents, claimLines, approvals, settlement] = await Promise.all([
+    const [rawDocuments, claimLines, approvals, settlement, attachmentRows] = await Promise.all([
       documentRepository.listByTrip(id),
       claimLineRepository.listByTrip(id),
       approvalRepository.listByTrip(id),
       settlementRepository.findByTrip(id),
+      documentRepository.listAttachmentsByTrip(id),
     ]);
+
+    // Every document ships its own attachments (name/size/mime, OCR status +
+    // text) so the UI can show exactly what was read from each upload,
+    // instead of just a bare subject line.
+    const attachmentsByDoc = new Map<string, typeof attachmentRows>();
+    for (const a of attachmentRows) {
+      const list = attachmentsByDoc.get(a.rawDocumentId) ?? [];
+      list.push(a);
+      attachmentsByDoc.set(a.rawDocumentId, list);
+    }
+    const documents = rawDocuments.map((doc) => ({
+      ...doc,
+      attachments: attachmentsByDoc.get(doc.id) ?? [],
+    }));
+
     return { trip, documents, claimLines, approvals, settlement };
   },
 

@@ -231,6 +231,7 @@ export function TripWorkspacePage() {
               <DocumentsList
                 grid
                 documents={d.documents}
+                claimLines={d.claimLines}
                 removingId={removeDocument.isPending ? removeDocument.variables : null}
                 onRemove={
                   canEdit

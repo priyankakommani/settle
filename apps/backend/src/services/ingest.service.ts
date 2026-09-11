@@ -8,8 +8,9 @@ import { money, round2, toNum } from '../lib/num.js';
 import { parseEmail } from '../ingestion/mail-parser.js';
 import { classify, classifyDocumentText } from '../ingestion/classifier.js';
 import { dedupe } from '../ingestion/deduper.js';
-import { selectExtractor, extractorForCategory } from '../ingestion/extractors/registry.js';
+import { selectExtractor, extractorForCategory, extractWithFallback } from '../ingestion/extractors/registry.js';
 import { KNOWN_RECEIPT_TEXT } from '../ingestion/known-receipts.js';
+import { canOcr, runOcr } from '../ingestion/ocr.js';
 import type { ExtractedItem, ParsedEmail } from '../ingestion/types.js';
 import { tripService } from './trip.service.js';
 import { claimService } from './claim.service.js';
@@ -161,12 +162,11 @@ export const ingestService = {
 
       const atts = await documentRepository.listAttachments(doc.id);
       const ocrText = atts.map((a) => a.ocrText).filter(Boolean).join('\n') || undefined;
-      const extractor =
-        selectExtractor(parsed) ?? extractorForCategory(doc.category);
-      if (!extractor) continue;
+      const picked = selectExtractor(parsed) ?? extractorForCategory(doc.category);
+      const { items } = extractWithFallback(picked, parsed, ocrText);
 
       const proofFallback = parsed.messageId ?? doc.subject ?? null;
-      for (const item of extractor.extract(parsed, ocrText)) {
+      for (const item of items) {
         flagOtherPerson(item, claimantFirst);
         pending.push({ item, docId: doc.id, proofFallback });
       }
@@ -235,10 +235,11 @@ async function processEmailFile(
     return { outcome: { ...outcome, outcome: 'context' }, items: [] };
   }
 
-  const extractor = selectExtractor(parsed) ?? extractorForCategory(cls.category);
+  const picked = selectExtractor(parsed) ?? extractorForCategory(cls.category);
+  const { extractor, items } = extractWithFallback(picked, parsed, ocrText);
   if (!extractor) return { outcome: { ...outcome, outcome: 'no-extractor' }, items: [] };
+  if (items.length === 0) return { outcome: { ...outcome, outcome: 'no-extractor' }, items: [] };
 
-  const items = extractor.extract(parsed, ocrText);
   items.forEach((i) => flagOtherPerson(i, claimantFirst));
   const proofFallback = parsed.messageId ?? parsed.subject ?? null;
   return {
@@ -248,8 +249,8 @@ async function processEmailFile(
 }
 
 async function processReceiptFile(tripId: string, file: UploadFile): Promise<ProcessResult> {
-  const known = KNOWN_RECEIPT_TEXT[file.filename];
-  const ocrText = known ?? '';
+  const resolved = await resolveOcr(file.filename, file.mime, file.buffer);
+  const ocrText = resolved.text ?? '';
   const cls = classifyDocumentText(ocrText, file.filename);
   const rawBlobRef = await storeBlob(tripId, file.filename, file.buffer);
 
@@ -278,7 +279,7 @@ async function processReceiptFile(tripId: string, file: UploadFile): Promise<Pro
     categoryConfidence: cls.confidence.toFixed(3),
     isNoise: false,
   });
-  await storeAttachment(doc.id, tripId, file.filename, file.mime, file.buffer);
+  await storeAttachment(doc.id, tripId, file.filename, file.mime, file.buffer, resolved);
 
   const outcome: DocOutcome = {
     document: doc.id,
@@ -289,9 +290,8 @@ async function processReceiptFile(tripId: string, file: UploadFile): Promise<Pro
     outcome: 'stored',
   };
 
-  const extractor =
-    extractorForCategory(cls.category) ?? selectExtractor(synthetic);
-  const items = extractor ? extractor.extract(synthetic, ocrText || undefined) : [];
+  const picked = extractorForCategory(cls.category) ?? selectExtractor(synthetic);
+  const { items } = extractWithFallback(picked, synthetic, ocrText || undefined);
 
   if (items.length > 0) {
     return {
@@ -386,6 +386,21 @@ async function removeBlob(rel: string | null | undefined): Promise<void> {
   }
 }
 
+type OcrResolution = { text: string | null; status: 'done' | 'skipped' | 'failed' };
+
+/**
+ * OCR resolution order: exact-filename lookup (the two known sample receipts)
+ * first, then real OCR for any other image. PDFs have no rasterizer wired up
+ * yet, so they're left `skipped` and fall back to manual entry.
+ */
+async function resolveOcr(filename: string, mime: string, content: Buffer): Promise<OcrResolution> {
+  const known = KNOWN_RECEIPT_TEXT[filename];
+  if (known) return { text: known, status: 'done' };
+  if (!canOcr(mime)) return { text: null, status: 'skipped' };
+  const text = await runOcr(content, mime);
+  return { text, status: text ? 'done' : 'failed' };
+}
+
 /** Store an attachment blob + row; returns its OCR text when we can read it. */
 async function storeAttachment(
   rawDocumentId: string,
@@ -393,19 +408,21 @@ async function storeAttachment(
   filename: string,
   mime: string,
   content: Buffer,
+  resolved?: OcrResolution,
 ): Promise<string | undefined> {
-  const known = KNOWN_RECEIPT_TEXT[filename];
   const blobRef = await storeBlob(tripId, filename, content);
+  const { text: ocrText, status: ocrStatus } = resolved ?? (await resolveOcr(filename, mime, content));
+
   await documentRepository.addAttachment({
     rawDocumentId,
     filename,
     mime,
     sizeBytes: content.length,
     blobRef,
-    ocrText: known ?? null,
-    ocrStatus: known ? 'done' : 'skipped',
+    ocrText,
+    ocrStatus,
   });
-  return known;
+  return ocrText ?? undefined;
 }
 
 /** parsedJson without attachment bytes (keeps jsonb small; replay only needs text + mime). */

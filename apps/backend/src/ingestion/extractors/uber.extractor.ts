@@ -1,7 +1,7 @@
 import { ClaimCategory, PaidBy } from '@settle/shared';
 import type { ExtractedItem } from '../types.js';
 import type { Extractor } from './types.js';
-import { amount, group } from './_parse.js';
+import { amount, detectCurrency, group } from './_parse.js';
 import { looseDateToIsoDay } from '../../lib/dates.js';
 
 /**
@@ -16,9 +16,11 @@ export const uberExtractor: Extractor = {
     (email.from ?? '').includes('uber.com') || /trip with uber/i.test(email.subject ?? ''),
   extract: (email): ExtractedItem[] => {
     const body = email.textBody ?? '';
+    // Tolerate any currency symbol/text between the label and the figure
+    // (some receipts show "$7.98" instead of the sample pack's "INR 172.00").
     const total =
-      amount(body, /Total\s+INR\s+([\d,]+\.\d{2})/i) ??
-      amount(body, /Amount due\s+INR\s+([\d,]+\.\d{2})/i);
+      amount(body, /Total\b[^\n\d]{0,20}([\d,]+\.\d{2})/i) ??
+      amount(body, /Amount due\b[^\n\d]{0,20}([\d,]+\.\d{2})/i);
     if (total === null) return [];
 
     const tax = amount(body, /Taxes?\s+([\d,]+\.\d{2})/i) ?? 0;
@@ -37,7 +39,7 @@ export const uberExtractor: Extractor = {
         grossAmount: total,
         taxAmount: tax,
         paidBy: PaidBy.EMPLOYEE,
-        currency: 'INR',
+        currency: detectCurrency(body),
         reference: null,
         meta: { rider, pickup, drop, airportTransfer },
       },

@@ -57,6 +57,28 @@ export const documentRepository = {
     }
   },
 
+  /** All attachments for a trip in one query, for the trip-detail aggregate (avoids N+1). */
+  async listAttachmentsByTrip(tripId: string) {
+    try {
+      return await db
+        .select({
+          id: attachments.id,
+          rawDocumentId: attachments.rawDocumentId,
+          filename: attachments.filename,
+          mime: attachments.mime,
+          sizeBytes: attachments.sizeBytes,
+          ocrText: attachments.ocrText,
+          ocrStatus: attachments.ocrStatus,
+          createdAt: attachments.createdAt,
+        })
+        .from(attachments)
+        .innerJoin(rawDocuments, eq(attachments.rawDocumentId, rawDocuments.id))
+        .where(eq(rawDocuments.tripId, tripId));
+    } catch (err) {
+      throw mapDbError(err);
+    }
+  },
+
   async deleteByTrip(tripId: string): Promise<void> {
     try {
       await db.delete(rawDocuments).where(eq(rawDocuments.tripId, tripId));

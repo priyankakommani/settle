@@ -35,7 +35,7 @@ export function AdminClaimDetailPage() {
           </div>
           <Card><CardHeader title={`Claim lines (${detail.claimLines.length})`} /><CardBody flush><ClaimLinesTable lines={detail.claimLines} /></CardBody></Card>
           <Card><CardHeader title="Settlement summary" /><CardBody>{detail.settlement ? <SettlementSummary s={detail.settlement} /> : <p className="u-muted">Not computed.</p>}</CardBody></Card>
-          <Card><CardHeader title={`Source documents (${detail.documents.length})`} /><CardBody><DocumentsList documents={detail.documents} grid /></CardBody></Card>
+          <Card><CardHeader title={`Source documents (${detail.documents.length})`} /><CardBody><DocumentsList documents={detail.documents} claimLines={detail.claimLines} grid /></CardBody></Card>
         </>
       )}
     </AsyncSection>

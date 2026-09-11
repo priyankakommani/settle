@@ -1,7 +1,7 @@
 import { ClaimCategory, PaidBy } from '@settle/shared';
 import type { ExtractedItem } from '../types.js';
 import type { Extractor } from './types.js';
-import { amount, group } from './_parse.js';
+import { amount, detectCurrency, firstNonBlankLine, group } from './_parse.js';
 import { looseDateToIsoDay } from '../../lib/dates.js';
 import { round2, toNum } from '../../lib/num.js';
 
@@ -36,19 +36,26 @@ export const hotelInvoiceExtractor: Extractor = {
 
     // Only the portion of GST attributable to the room tariff is reimbursable.
     const roomTax = subTotal > 0 ? round2(totalTax * (room / subTotal)) : totalTax;
+    // Accept both "19 Jun 2026" and "19-Jun-2026" style dates.
     const checkoutIso =
-      looseDateToIsoDay(group(src, /Check[- ]?out\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/i)) ??
+      looseDateToIsoDay(group(src, /Check[- ]?out\s+(\d{1,2}[-\s][A-Za-z]{3}[a-z]*[-\s]\d{4})/i)) ??
       (email.date ? email.date.slice(0, 10) : null);
+
+    // First non-blank line is the hotel's own letterhead/name in every sample
+    // invoice — fall back to the subject line, then a generic label, instead
+    // of assuming it's always "Keys Prime Whitefield".
+    const merchant = (firstNonBlankLine(ocrText) ?? email.subject?.trim() ?? 'Hotel').slice(0, 120);
+    const currency = detectCurrency(src);
 
     const items: ExtractedItem[] = [
       {
         category: ClaimCategory.LODGING,
-        merchant: 'Keys Prime Whitefield',
+        merchant,
         lineDate: checkoutIso,
         grossAmount: round2(room + roomTax),
         taxAmount: roomTax,
         paidBy: PaidBy.EMPLOYEE,
-        currency: 'INR',
+        currency,
         reference: folio,
         meta: { folio, nights, tariffPerNight: round2(room / nights), roomTax },
       },
@@ -64,12 +71,12 @@ export const hotelInvoiceExtractor: Extractor = {
       if (amt && amt > 0) {
         items.push({
           category: ClaimCategory.OTHER,
-          merchant: 'Keys Prime Whitefield',
+          merchant,
           lineDate: checkoutIso,
           grossAmount: amt,
           taxAmount: 0,
           paidBy: PaidBy.EMPLOYEE,
-          currency: 'INR',
+          currency,
           reference: folio ? `${folio}:${kind}` : null,
           meta: { folio, kind, nonReimbursable: true },
         });
