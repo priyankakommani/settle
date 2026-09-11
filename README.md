@@ -10,6 +10,11 @@ computed, routes it up the right approval chain, hands it to Finance, and tracks
 it to payment — removing the 25 minutes of manual form-filling, the errors, and
 the "where is my money" follow-ups.
 
+**Live demo:** [settle-six-mu.vercel.app](https://settle-six-mu.vercel.app/)
+(frontend, Vercel) · API on Render at
+[settle-uw6n.onrender.com](https://settle-uw6n.onrender.com) (auto-deploys from
+`main`). See [Demo accounts](#demo-accounts) below for sign-in credentials.
+
 The problem pack (emails, receipts, policy, employee master, form template)
 lives in [`apps/backend/seed-data/pack/`](apps/backend/seed-data/pack).
 [`SUBMISSION_NOTE.md`](SUBMISSION_NOTE.md) is the one-page note — problem
