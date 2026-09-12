@@ -13,14 +13,15 @@ export const uberExtractor: Extractor = {
   name: 'uber',
   handles: ['cab'],
   canExtract: (email) =>
-    (email.from ?? '').includes('uber.com') || /trip with uber/i.test(email.subject ?? ''),
+    (email.from ?? '').includes('uber.com') ||
+    /trip with uber|uber receipt|thanks for riding/i.test(`${email.subject ?? ''}\n${email.textBody ?? ''}`),
   extract: (email): ExtractedItem[] => {
     const body = email.textBody ?? '';
     // Tolerate any currency symbol/text between the label and the figure
-    // (some receipts show "$7.98" instead of the sample pack's "INR 172.00").
+    // (e.g. "$7.98", "Trip fare $5.41", "Subtotal $5.41", "INR 172.00").
     const total =
-      amount(body, /Total\b[^\n\d]{0,20}([\d,]+\.\d{2})/i) ??
-      amount(body, /Amount due\b[^\n\d]{0,20}([\d,]+\.\d{2})/i);
+      amount(body, /(?:total|amount\s+due|trip\s+fare|subtotal)\b[^\n\d]{0,20}([\d,]+\.\d{2})/i) ??
+      amount(body, /(?:inr|rs\.?|₹|\$|usd)\s*([\d,]+\.\d{2})/i);
     if (total === null) return [];
 
     const tax = amount(body, /Taxes?\s+([\d,]+\.\d{2})/i) ?? 0;

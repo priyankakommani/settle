@@ -35,7 +35,12 @@ export function ClaimChecklist({
         : claimLines.length > 0
           ? 'done'
           : 'pending';
-  const policyState: CheckState = settlement == null ? 'pending' : linesNeedingInfo > 0 ? 'warn' : 'done';
+  const policyState: CheckState =
+    documents.length === 0 || claimLines.length === 0 || settlement == null
+      ? 'pending'
+      : linesNeedingInfo > 0
+        ? 'warn'
+        : 'done';
 
   return (
     <ul className="progress-checklist">

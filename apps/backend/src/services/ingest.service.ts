@@ -289,7 +289,8 @@ async function processEmailFile(
 }
 
 async function processReceiptFile(tripId: string, file: UploadFile): Promise<ProcessResult> {
-  const resolved = await resolveOcr(file.filename, file.mime, file.buffer);
+  const effectiveMime = inferMime(file.filename, file.mime);
+  const resolved = await resolveOcr(file.filename, effectiveMime, file.buffer);
   const ocrText = resolved.text ?? '';
   const cls = classifyDocumentText(ocrText, file.filename);
   const rawBlobRef = await storeBlob(tripId, file.filename, file.buffer);
@@ -303,7 +304,7 @@ async function processReceiptFile(tripId: string, file: UploadFile): Promise<Pro
     messageId: null,
     inReplyTo: null,
     textBody: ocrText,
-    attachments: [{ filename: file.filename, mime: file.mime, content: file.buffer }],
+    attachments: [{ filename: file.filename, mime: effectiveMime, content: file.buffer }],
   };
 
   const doc = await documentRepository.create({
@@ -340,19 +341,7 @@ async function processReceiptFile(tripId: string, file: UploadFile): Promise<Pro
     };
   }
 
-  // Couldn't read the receipt — leave a placeholder line the claimant completes.
-  const placeholder: ExtractedItem = {
-    category: 'other',
-    merchant: file.filename,
-    lineDate: null,
-    grossAmount: 0,
-    taxAmount: 0,
-    paidBy: 'Employee',
-    currency: 'INR',
-    reference: file.filename,
-    meta: { needsManualEntry: true, uploadedFile: file.filename },
-  };
-  return { outcome, items: [{ item: placeholder, docId: doc.id, proofFallback: file.filename }] };
+  return { outcome, items: [] };
 }
 
 /* ------------------------------------------------------------------ *
@@ -446,6 +435,20 @@ async function resolveOcr(filename: string, mime: string, content: Buffer): Prom
   return { text, status: text ? 'done' : 'failed' };
 }
 
+function inferMime(filename: string, fallbackMime?: string): string {
+  if (fallbackMime && fallbackMime !== 'application/octet-stream' && fallbackMime.includes('/')) {
+    return fallbackMime;
+  }
+  const ext = filename.split('.').pop()?.toLowerCase();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'gif') return 'image/gif';
+  if (ext === 'svg') return 'image/svg+xml';
+  if (ext === 'pdf') return 'application/pdf';
+  return fallbackMime || 'application/octet-stream';
+}
+
 /** Store an attachment blob + row; returns its OCR text when we can read it. */
 async function storeAttachment(
   rawDocumentId: string,
@@ -455,13 +458,14 @@ async function storeAttachment(
   content: Buffer,
   resolved?: OcrResolution,
 ): Promise<string | undefined> {
+  const effectiveMime = inferMime(filename, mime);
   const blobRef = await storeBlob(tripId, filename, content);
-  const { text: ocrText, status: ocrStatus } = resolved ?? (await resolveOcr(filename, mime, content));
+  const { text: ocrText, status: ocrStatus } = resolved ?? (await resolveOcr(filename, effectiveMime, content));
 
   await documentRepository.addAttachment({
     rawDocumentId,
     filename,
-    mime,
+    mime: effectiveMime,
     sizeBytes: content.length,
     blobRef,
     ocrText,

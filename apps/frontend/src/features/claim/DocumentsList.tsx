@@ -85,27 +85,20 @@ function useAttachmentPreview(tripId: string, attachmentId: string): AttachmentP
   return state;
 }
 
-/** The card's header block: the receipt image itself filling the frame, or a big icon tile for email/manual entries. */
-function DocThumb({ tripId, doc }: { tripId: string; doc: TripDocument }) {
-  const firstAttachment = doc.attachments[0];
-  const canPreview = doc.sourceType === 'image' && Boolean(firstAttachment);
-  return canPreview ? (
-    <DocThumbImage tripId={tripId} attachmentId={firstAttachment!.id} />
-  ) : (
-    <div className={cx('doc-card__thumb-icon', `doc-card__thumb-icon--${doc.sourceType}`)}>
-      {doc.sourceType === 'eml' ? <Icon.Inbox size={28} /> : <Icon.File size={28} />}
-    </div>
-  );
+function isImageFile(mime?: string, filename?: string): boolean {
+  if (mime?.startsWith('image/')) return true;
+  if (filename) {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext && ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'heic'].includes(ext)) return true;
+  }
+  return false;
 }
 
-function DocThumbImage({ tripId, attachmentId }: { tripId: string; attachmentId: string }) {
-  const preview = useAttachmentPreview(tripId, attachmentId);
-  if (preview.status === 'ready' && preview.mime.startsWith('image/')) {
-    return <img src={preview.url} alt="" />;
-  }
+/** The card's header block: a clean icon tile for all uploaded documents. */
+function DocThumb({ doc }: { doc: TripDocument }) {
   return (
-    <div className="doc-card__thumb-icon">
-      <Icon.File size={28} />
+    <div className={cx('doc-card__thumb-icon', `doc-card__thumb-icon--${doc.sourceType}`)}>
+      {doc.sourceType === 'eml' ? <Icon.Inbox size={28} /> : <Icon.File size={28} />}
     </div>
   );
 }
@@ -158,8 +151,8 @@ function AttachmentPreview({ att, tripId }: { att: TripDocumentAttachment; tripI
   const status = OCR_STATUS[att.ocrStatus] ?? { label: att.ocrStatus, tone: 'neutral' as const };
   const text = att.ocrText ?? '';
   const preview = useAttachmentPreview(tripId, att.id);
-  const isImage = preview.status === 'ready' && preview.mime.startsWith('image/');
-  const isPdf = preview.status === 'ready' && preview.mime === 'application/pdf';
+  const isImage = preview.status === 'ready' && isImageFile(preview.mime, att.filename);
+  const isPdf = preview.status === 'ready' && (preview.mime === 'application/pdf' || att.filename.toLowerCase().endsWith('.pdf'));
 
   return (
     <div className="policy-guide" style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: 10 }}>
@@ -239,7 +232,7 @@ export function DocumentsList({
               title="Click to view document detail"
             >
               <div className="doc-card__thumb">
-                <DocThumb tripId={tripId} doc={d} />
+                <DocThumb doc={d} />
                 {onRemove ? (
                   <button
                     type="button"

@@ -35,10 +35,10 @@ export function classify(email: ParsedEmail): Classification {
   if (/tax invoice|folio/i.test(subject)) {
     return { category: DocumentCategory.HOTEL_INVOICE, confidence: 0.92, isNoise: false };
   }
-  if (from.includes('uber.com') || /trip with uber|uber receipt/i.test(subject)) {
+  if (from.includes('uber.com') || /trip with uber|uber receipt|thanks for riding/i.test(`${subject}\n${body}`)) {
     return {
       category: DocumentCategory.CAB,
-      confidence: from.includes('uber.com') ? 0.95 : 0.6,
+      confidence: from.includes('uber.com') ? 0.95 : 0.75,
       isNoise: false,
     };
   }
@@ -70,6 +70,9 @@ export function classify(email: ParsedEmail): Classification {
 export function classifyDocumentText(text: string, filename: string): Classification {
   const hay = `${filename}\n${text}`.toLowerCase();
 
+  if (/\buber\b|trip fare|ride with|thanks for riding|airport surcharge/.test(hay)) {
+    return { category: DocumentCategory.CAB, confidence: 0.75, isNoise: false };
+  }
   if (/tax invoice|folio|room charge|room tariff|check[- ]?out/.test(hay)) {
     return { category: DocumentCategory.HOTEL_INVOICE, confidence: 0.82, isNoise: false };
   }
@@ -80,9 +83,6 @@ export function classifyDocumentText(text: string, filename: string): Classifica
       confidence: 0.68,
       isNoise: false,
     };
-  }
-  if (/\buber\b|trip fare|ride with|airport surcharge/.test(hay)) {
-    return { category: DocumentCategory.CAB, confidence: 0.66, isNoise: false };
   }
   if (/e-?ticket|\bpnr\b|boarding pass|base fare/.test(hay)) {
     return { category: DocumentCategory.FLIGHT, confidence: 0.66, isNoise: false };
