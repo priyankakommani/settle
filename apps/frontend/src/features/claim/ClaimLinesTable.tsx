@@ -4,6 +4,7 @@ import { Money, VerdictTag } from '../../ui/domain.js';
 import { Button, EmptyState } from '../../ui/primitives.js';
 import { Icon } from '../../ui/icons.js';
 import { shortDate } from '../../lib/format.js';
+import { explainMissing } from './missingInfo.js';
 
 const CATEGORY_LABEL: Record<string, string> = {
   lodging: 'Lodging',
@@ -32,6 +33,7 @@ interface SelectedProof {
   sourceDocumentId?: string | null;
   verdict: string;
   reasonText?: string | null;
+  missing?: string[];
   editedByUser?: boolean;
   originalExtraction?: OriginalExtraction;
 }
@@ -76,7 +78,10 @@ export function ClaimLinesTable({
         <tbody>
           {lines.map((l) => {
             const memoOnly = l.paidBy === 'Company';
-            const showReason = l.reasonText && l.policyVerdict !== 'allowed';
+            const missing = Array.isArray(l.policyMeta?.missing) ? (l.policyMeta.missing as string[]) : [];
+            const needsInfo = l.policyVerdict === 'needs_info';
+            const isCapped = l.policyVerdict === 'capped';
+            const isDisallowed = l.policyVerdict === 'disallowed';
             const merchantName = l.merchant ?? CATEGORY_LABEL[l.category] ?? l.category;
             const grossNum = typeof l.grossAmount === 'number' ? l.grossAmount : parseFloat(String(l.grossAmount || 0));
             const allowedNum = typeof l.allowedAmount === 'number' ? l.allowedAmount : parseFloat(String(l.allowedAmount || 0));
@@ -93,6 +98,7 @@ export function ClaimLinesTable({
               sourceDocumentId: l.sourceDocumentId,
               verdict: l.policyVerdict ?? 'allowed',
               reasonText: l.reasonText,
+              missing,
               editedByUser: l.editedByUser,
               originalExtraction,
             };
@@ -105,8 +111,35 @@ export function ClaimLinesTable({
                   </div>
                   <div className="u-subtle" style={{ fontSize: 'var(--fs-12)' }}>
                     {CATEGORY_LABEL[l.category] ?? l.category}
-                    {showReason ? ` · ${l.reasonText}` : ''}
                   </div>
+                  {isCapped && l.reasonText ? (
+                    <div style={{ fontSize: 'var(--fs-12)', color: 'var(--warn)', marginTop: 4 }}>
+                      <span className="u-strong">Capped:</span> {l.reasonText}
+                    </div>
+                  ) : null}
+                  {isDisallowed && l.reasonText ? (
+                    <div style={{ fontSize: 'var(--fs-12)', color: 'var(--danger)', marginTop: 4 }}>
+                      <span className="u-strong">Disallowed:</span> {l.reasonText}
+                    </div>
+                  ) : null}
+                  {needsInfo && missing.length > 0 ? (
+                    <ul
+                      style={{
+                        margin: '4px 0 0',
+                        padding: 0,
+                        listStyle: 'none',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                      }}
+                    >
+                      {missing.map((m) => (
+                        <li key={m} style={{ fontSize: 'var(--fs-12)', color: 'var(--warn)' }}>
+                          <span className="u-strong">Missing — {m}:</span> {explainMissing(m)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </td>
                 <td className="u-nowrap">{shortDate(l.lineDate)}</td>
                 <td className="u-nowrap">{l.paidBy}</td>
@@ -205,6 +238,19 @@ export function ClaimLinesTable({
                   </span>
                 </div>
               </div>
+
+              {selectedProof.missing && selectedProof.missing.length > 0 && (
+                <div className="banner banner--warn" style={{ marginTop: 4, fontSize: 'var(--fs-12)' }}>
+                  <div className="u-strong" style={{ marginBottom: 4 }}>What's needed before this can be assessed</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {selectedProof.missing.map((m) => (
+                      <li key={m}>
+                        <span className="u-strong">{m}:</span> {explainMissing(m)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {selectedProof.reasonText && (
                 <div className="banner banner--warn" style={{ marginTop: 4, fontSize: 'var(--fs-12)' }}>

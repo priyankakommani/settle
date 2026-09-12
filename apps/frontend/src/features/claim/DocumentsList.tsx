@@ -260,6 +260,9 @@ export function DocumentsList({
                   {d.sentAt ? ` · ${shortDate(d.sentAt)}` : ''}
                   {d.attachments.length > 0 ? ` · ${d.attachments.length} file${d.attachments.length > 1 ? 's' : ''}` : ''}
                 </span>
+                {status.tone === 'warn' ? (
+                  <span style={{ fontSize: 'var(--fs-12)', color: 'var(--warn)' }}>{status.detail}</span>
+                ) : null}
                 {(() => {
                   const snippet = d.parsedJson?.textBody?.trim() || d.attachments.map((a) => a.ocrText).find(Boolean);
                   return snippet ? (
