@@ -56,7 +56,7 @@ export function deriveDocStatus(doc: TripDocument, claimLines: ClaimLine[], allD
       return {
         tone: 'warn',
         label: 'No claim line',
-        detail: "Couldn't automatically read an amount/category from this document — check the attachment preview below, then add the expense manually.",
+        detail: "Couldn't automatically read an amount/category from this document — check the attachment preview below.",
       };
   }
 }

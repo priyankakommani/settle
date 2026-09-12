@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { ClaimLine } from '../../api/types.js';
 import { Money, VerdictTag } from '../../ui/domain.js';
-import { Badge, Button, EmptyState } from '../../ui/primitives.js';
+import { Button, EmptyState } from '../../ui/primitives.js';
 import { Icon } from '../../ui/icons.js';
 import { shortDate } from '../../lib/format.js';
 
@@ -100,11 +100,8 @@ export function ClaimLinesTable({
             return (
               <tr key={l.id} className={memoOnly ? 'table__row-strike' : undefined}>
                 <td className="table__cell--primary">
-                  <div className="u-strong" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div className="u-strong">
                     {merchantName}
-                    {l.editedByUser && originalExtraction ? (
-                      <Badge tone="info">Edited</Badge>
-                    ) : null}
                   </div>
                   <div className="u-subtle" style={{ fontSize: 'var(--fs-12)' }}>
                     {CATEGORY_LABEL[l.category] ?? l.category}
@@ -212,23 +209,6 @@ export function ClaimLinesTable({
               {selectedProof.reasonText && (
                 <div className="banner banner--warn" style={{ marginTop: 4, fontSize: 'var(--fs-12)' }}>
                   {selectedProof.reasonText}
-                </div>
-              )}
-
-              {selectedProof.editedByUser && selectedProof.originalExtraction && (
-                <div style={{ marginTop: 4 }}>
-                  <Badge tone="info">Edited by claimant</Badge>
-                  <div className="policy-guide" style={{ marginTop: 6 }}>
-                    <div className="policy-guide__item">
-                      <span className="policy-guide__label">Originally read from document</span>
-                      <span className="u-mono">
-                        {CATEGORY_LABEL[selectedProof.originalExtraction.category] ?? selectedProof.originalExtraction.category}
-                        {selectedProof.originalExtraction.merchant ? ` · ${selectedProof.originalExtraction.merchant}` : ''}
-                        {' · '}
-                        {selectedProof.originalExtraction.currency} {selectedProof.originalExtraction.grossAmount}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               )}
             </div>

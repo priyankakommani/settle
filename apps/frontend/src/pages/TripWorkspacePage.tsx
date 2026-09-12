@@ -17,13 +17,12 @@ import {
 import { Icon } from '../ui/icons.js';
 import { StatusPill } from '../ui/domain.js';
 import { ApiError } from '../api/client.js';
-import type { ClaimLine, TripDetail } from '../api/types.js';
+import type { TripDetail } from '../api/types.js';
 import { TripFacts } from '../features/claim/TripFacts.js';
 import { TripProgressTracker } from '../features/claim/TripProgressTracker.js';
 import { ClaimChecklist } from '../features/claim/ClaimChecklist.js';
 import { DocumentsList } from '../features/claim/DocumentsList.js';
 import { ClaimLinesTable } from '../features/claim/ClaimLinesTable.js';
-import { ClaimLineFormModal } from '../features/claim/ClaimLineFormModal.js';
 import { SettlementSummary } from '../features/claim/SettlementSummary.js';
 import { ApprovalTimeline } from '../features/claim/ApprovalTimeline.js';
 import { EditTripModal } from '../features/claim/EditTripModal.js';
@@ -83,12 +82,9 @@ export function TripWorkspacePage() {
   const tab = params.get('tab') ?? 'overview';
 
   const q = useTripDetail(id);
-  const { ingest, removeDocument, removeLine, addLine, editLine, recompute, submit, updateTrip, deleteTrip } =
+  const { ingest, removeDocument, removeLine, recompute, submit, updateTrip, deleteTrip } =
     useTripAction(id);
   const fileInput = useRef<HTMLInputElement>(null);
-  const [lineModal, setLineModal] = useState<{ mode: 'add' } | { mode: 'edit'; line: ClaimLine } | null>(
-    null,
-  );
   const [editTripOpen, setEditTripOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
@@ -375,16 +371,7 @@ export function TripWorkspacePage() {
 
       {tab === 'claim-lines' ? (
         <Card>
-          <CardHeader
-            title={`Claim lines (${d.claimLines.length})`}
-            actions={
-              canEdit ? (
-                <Button size="sm" variant="secondary" onClick={() => setLineModal({ mode: 'add' })}>
-                  <Icon.Plus size={14} /> Add line manually
-                </Button>
-              ) : null
-            }
-          />
+          <CardHeader title={`Claim lines (${d.claimLines.length})`} />
           <CardBody flush>
             <ClaimLinesTable
               lines={d.claimLines}
@@ -392,14 +379,6 @@ export function TripWorkspacePage() {
                 canEdit
                   ? (line) => (
                       <span className="u-row u-gap-1">
-                        <button
-                          type="button"
-                          className="btn btn--ghost btn--sm"
-                          title="Edit this line"
-                          onClick={() => setLineModal({ mode: 'edit', line })}
-                        >
-                          Edit
-                        </button>
                         <button
                           type="button"
                           className="btn btn--ghost btn--sm btn--icon"
@@ -424,39 +403,6 @@ export function TripWorkspacePage() {
             />
           </CardBody>
         </Card>
-      ) : null}
-
-      {lineModal ? (
-        <ClaimLineFormModal
-          line={lineModal.mode === 'edit' ? lineModal.line : null}
-          saving={addLine.isPending || editLine.isPending}
-          error={lineModal.mode === 'add' ? addLine.error : editLine.error}
-          onClose={() => setLineModal(null)}
-          onSave={(body) => {
-            if (lineModal.mode === 'add') {
-              addLine.mutate(body, {
-                onSuccess: () => {
-                  toast.success('Line added');
-                  setLineModal(null);
-                },
-                onError: (e) =>
-                  toast.error(e instanceof ApiError ? e.message : 'Could not add the line'),
-              });
-            } else {
-              editLine.mutate(
-                { lineId: lineModal.line.id, body },
-                {
-                  onSuccess: () => {
-                    toast.success('Line updated');
-                    setLineModal(null);
-                  },
-                  onError: (e) =>
-                    toast.error(e instanceof ApiError ? e.message : 'Could not update the line'),
-                },
-              );
-            }
-          }}
-        />
       ) : null}
 
       {tab === 'settlement' ? (
