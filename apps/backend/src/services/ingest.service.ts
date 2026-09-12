@@ -1,9 +1,6 @@
-import { mkdir, writeFile, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { DocumentCategory, ErrorCode, TripStatus } from '@settle/shared';
-import { env } from '../config/env.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js';
+import { storeBlob, readBlob, removeBlob } from '../lib/blob-storage.js';
 import { money, round2, toNum } from '../lib/num.js';
 import { parseEmail } from '../ingestion/mail-parser.js';
 import { classify, classifyDocumentText } from '../ingestion/classifier.js';
@@ -19,7 +16,7 @@ import { employeeRepository } from '../repositories/employee.repository.js';
 import { documentRepository } from '../repositories/document.repository.js';
 import { claimLineRepository } from '../repositories/claim-line.repository.js';
 import { auditRepository } from '../repositories/audit.repository.js';
-import type { NewClaimLine } from '../db/schema/index.js';
+import type { Employee, NewClaimLine } from '../db/schema/index.js';
 
 interface UploadFile {
   filename: string;
@@ -133,6 +130,49 @@ export const ingestService = {
 
     const { claimLines, settlement } = await claimService.recompute(tripId);
     return { removed: docId, claimLines, settlement };
+  },
+
+  /** Read back the original uploaded file (the raw .eml, or the raw image/PDF as uploaded). */
+  async getDocumentFile(
+    tripId: string,
+    docId: string,
+    viewer: Employee,
+  ): Promise<{ filename: string; mime: string; buffer: Buffer }> {
+    await tripService.assertViewable(tripId, viewer);
+    const doc = await documentRepository.findById(docId);
+    if (!doc || doc.tripId !== tripId) {
+      throw new NotFoundError(`Document "${docId}" not found on this trip.`, ErrorCode.NOT_FOUND);
+    }
+    if (!doc.rawBlobRef) {
+      throw new NotFoundError(`Document "${docId}" has no stored file.`, ErrorCode.NOT_FOUND);
+    }
+    const buffer = await readBlob(doc.rawBlobRef);
+    if (doc.sourceType === 'eml') {
+      return { filename: `${doc.subject ?? doc.id}.eml`, mime: 'message/rfc822', buffer };
+    }
+    // Bare image/PDF uploads mirror themselves as a single attachment row, which is
+    // where the original mime type lives (raw_documents doesn't carry one).
+    const [att] = await documentRepository.listAttachments(doc.id);
+    return { filename: att?.filename ?? doc.subject ?? doc.id, mime: att?.mime ?? 'application/octet-stream', buffer };
+  },
+
+  /** Read back one attachment's original bytes (e.g. an image embedded in an .eml). */
+  async getAttachmentFile(
+    tripId: string,
+    attachmentId: string,
+    viewer: Employee,
+  ): Promise<{ filename: string; mime: string; buffer: Buffer }> {
+    await tripService.assertViewable(tripId, viewer);
+    const att = await documentRepository.findAttachmentById(attachmentId);
+    if (!att) {
+      throw new NotFoundError(`Attachment "${attachmentId}" not found.`, ErrorCode.NOT_FOUND);
+    }
+    const doc = await documentRepository.findById(att.rawDocumentId);
+    if (!doc || doc.tripId !== tripId) {
+      throw new NotFoundError(`Attachment "${attachmentId}" not found on this trip.`, ErrorCode.NOT_FOUND);
+    }
+    const buffer = await readBlob(att.blobRef);
+    return { filename: att.filename, mime: att.mime, buffer };
   },
 
   /** Re-derive machine claim lines from stored raw documents (e.g. after a policy change). */
@@ -327,12 +367,34 @@ async function persistNewLines(
   const docIdByItem = new Map(pending.map((p) => [p.item, p.docId]));
   const fallbackByItem = new Map(pending.map((p) => [p.item, p.proofFallback]));
 
+  // A document whose only extracted line collapsed into an earlier one (in
+  // this batch) produced zero claim lines, but that's expected, not a
+  // failure — mark it as a duplicate so the UI doesn't flag it as "no claim
+  // line" / needing attention.
+  for (const dup of duplicates) {
+    const dupDocId = docIdByItem.get(dup.item);
+    const originalDocId = docIdByItem.get(dup.priorItem);
+    if (dupDocId && originalDocId && dupDocId !== originalDocId) {
+      await documentRepository.update(dupDocId, { isDuplicateOf: originalDocId });
+    }
+  }
+
   const existing = await claimLineRepository.listByTrip(tripId);
-  const existingKeys = new Set(existing.map(lineKeyFromRow));
+  const existingByKey = new Map(existing.map((l) => [lineKeyFromRow(l), l]));
 
   const toInsert: NewClaimLine[] = [];
+  let crossBatchDuplicates = 0;
   for (const item of kept) {
-    if (existingKeys.has(lineKey(item))) continue;
+    const matchExisting = existingByKey.get(lineKey(item));
+    if (matchExisting) {
+      crossBatchDuplicates += 1;
+      // Same thing, but against a line from an earlier, separate upload.
+      const dupDocId = docIdByItem.get(item);
+      if (dupDocId && matchExisting.sourceDocumentId && dupDocId !== matchExisting.sourceDocumentId) {
+        await documentRepository.update(dupDocId, { isDuplicateOf: matchExisting.sourceDocumentId });
+      }
+      continue;
+    }
     toInsert.push({
       tripId,
       sourceDocumentId: docIdByItem.get(item) ?? null,
@@ -349,7 +411,7 @@ async function persistNewLines(
   }
 
   const rows = await claimLineRepository.bulkCreate(toInsert);
-  return { inserted: rows.length, duplicates: duplicates.length };
+  return { inserted: rows.length, duplicates: duplicates.length + crossBatchDuplicates };
 }
 
 async function applyAdvance(tripId: string, parsed: ParsedEmail): Promise<void> {
@@ -366,23 +428,6 @@ function flagOtherPerson(item: ExtractedItem, claimantFirst: string): void {
   const rider = typeof item.meta?.rider === 'string' ? item.meta.rider.toLowerCase() : '';
   if (rider && claimantFirst && !rider.startsWith(claimantFirst)) {
     item.meta = { ...item.meta, incurredByOther: true };
-  }
-}
-
-async function storeBlob(tripId: string, filename: string, buf: Buffer): Promise<string> {
-  const rel = join(tripId, `${randomUUID()}-${safeName(filename)}`);
-  await mkdir(join(env.STORAGE_DIR, tripId), { recursive: true });
-  await writeFile(join(env.STORAGE_DIR, rel), buf);
-  return rel;
-}
-
-/** Best-effort delete of a stored blob; a missing file is not an error. */
-async function removeBlob(rel: string | null | undefined): Promise<void> {
-  if (!rel) return;
-  try {
-    await unlink(join(env.STORAGE_DIR, rel));
-  } catch {
-    /* already gone / never written */
   }
 }
 
@@ -435,10 +480,6 @@ function slimParsed(p: ParsedEmail): Record<string, unknown> {
 
 function firstName(name: string | null | undefined): string {
   return (name ?? '').trim().split(/\s+/)[0]?.toLowerCase() ?? '';
-}
-
-function safeName(filename: string): string {
-  return filename.replace(/[^A-Za-z0-9._-]/g, '_');
 }
 
 function assertClaimant(trip: { employeeCode: string }, actorCode: string): void {

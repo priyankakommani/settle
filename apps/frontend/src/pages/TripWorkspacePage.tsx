@@ -1,5 +1,5 @@
-import { useMemo, useRef } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useMemo, useRef, useState } from 'react';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { PolicyVerdict, TripStatus } from '@settle/shared';
 import { useCurrentUser } from '../app/session.js';
 import { useToast } from '../ui/toast.js';
@@ -17,33 +17,80 @@ import {
 import { Icon } from '../ui/icons.js';
 import { StatusPill } from '../ui/domain.js';
 import { ApiError } from '../api/client.js';
+import type { ClaimLine, TripDetail } from '../api/types.js';
 import { TripFacts } from '../features/claim/TripFacts.js';
+import { TripProgressTracker } from '../features/claim/TripProgressTracker.js';
+import { ClaimChecklist } from '../features/claim/ClaimChecklist.js';
 import { DocumentsList } from '../features/claim/DocumentsList.js';
 import { ClaimLinesTable } from '../features/claim/ClaimLinesTable.js';
+import { ClaimLineFormModal } from '../features/claim/ClaimLineFormModal.js';
 import { SettlementSummary } from '../features/claim/SettlementSummary.js';
 import { ApprovalTimeline } from '../features/claim/ApprovalTimeline.js';
+import { EditTripModal } from '../features/claim/EditTripModal.js';
 import { useTripAction, useTripDetail } from '../features/claim/useTripDetail.js';
+import { inr } from '../lib/format.js';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
-  { id: 'claim', label: 'Inbox & Claim' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'claim-lines', label: 'Claim Lines' },
   { id: 'settlement', label: 'Settlement' },
   { id: 'approvals', label: 'Approvals' },
 ];
 
 const EDITABLE_STATES: string[] = [TripStatus.DRAFT, TripStatus.RETURNED];
 
+/** One-line "what/who/when/with whom" summary shown under the trip's ID, e.g. "Client visit — ₹20,000 · Sept 2026 · with Reporting Manager". */
+function summaryLine(
+  trip: TripDetail['trip'],
+  approvals: TripDetail['approvals'],
+  claimantName: string,
+): string {
+  const parts: string[] = [trip.purpose ?? 'Travel request'];
+  if (trip.estimatedCost) parts.push(inr(trip.estimatedCost));
+  const monthYear = new Date(trip.createdAt).toLocaleDateString('en-IN', {
+    month: 'short',
+    year: 'numeric',
+  });
+  const bits = [parts.join(' — '), claimantName, monthYear];
+
+  switch (trip.status) {
+    case TripStatus.PENDING_APPROVAL: {
+      const pending = approvals.find((a) => a.decision === 'pending');
+      bits.push(pending ? `with ${pending.role}` : 'with approver');
+      break;
+    }
+    case TripStatus.PENDING_FINANCE:
+      bits.push('with Finance');
+      break;
+    case TripStatus.VERIFIED:
+      bits.push('awaiting payout');
+      break;
+    case TripStatus.PAID:
+      bits.push('paid');
+      break;
+  }
+  return bits.join(' · ');
+}
+
 /** The traveller's claim workspace: review the auto-built claim, fix it, submit. */
 export function TripWorkspacePage() {
   const { id = '' } = useParams();
   const user = useCurrentUser();
   const toast = useToast();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') ?? 'overview';
 
   const q = useTripDetail(id);
-  const { ingest, removeDocument, removeLine, recompute, submit } = useTripAction(id);
+  const { ingest, removeDocument, removeLine, addLine, editLine, recompute, submit, updateTrip, deleteTrip } =
+    useTripAction(id);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [lineModal, setLineModal] = useState<{ mode: 'add' } | { mode: 'edit'; line: ClaimLine } | null>(
+    null,
+  );
+  const [editTripOpen, setEditTripOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -108,12 +155,28 @@ export function TripWorkspacePage() {
   const d = q.data!;
   const isOwner = d.trip.employeeCode === user.empCode;
   const canEdit = isOwner && EDITABLE_STATES.includes(d.trip.status);
+  // Stricter than canEdit: once submitted the trip is part of someone else's
+  // workflow, so it can be returned but never simply deleted.
+  const canDelete = isOwner && d.trip.status === TripStatus.DRAFT;
 
   const doSubmit = () => {
     submit.mutate(undefined, {
       onSuccess: () => toast.success('Claim submitted for approval'),
       onError: (e) =>
         toast.error(e instanceof ApiError ? e.message : 'Could not submit the claim'),
+    });
+  };
+
+  const doDelete = () => {
+    deleteTrip.mutate(undefined, {
+      onSuccess: () => {
+        toast.success(`${d.trip.travelRequestId} deleted`);
+        navigate('/trips');
+      },
+      onError: (e) => {
+        toast.error(e instanceof ApiError ? e.message : 'Could not delete the trip');
+        setDeleteConfirmOpen(false);
+      },
     });
   };
 
@@ -130,21 +193,30 @@ export function TripWorkspacePage() {
             <StatusPill status={d.trip.status} />
           </span>
         }
-        subtitle={d.trip.purpose ?? undefined}
+        subtitle={summaryLine(d.trip, d.approvals, user.name)}
         actions={
           canEdit ? (
             <>
+              <Button variant="secondary" onClick={() => setEditTripOpen(true)}>
+                Edit trip
+              </Button>
+              {canDelete ? (
+                <Button variant="danger" onClick={() => setDeleteConfirmOpen(true)}>
+                  Delete trip
+                </Button>
+              ) : null}
               <Button
                 onClick={() =>
                   recompute.mutate(undefined, {
-                    onSuccess: () => toast.success('Policy check re-run'),
+                    onSuccess: () => toast.success('Claim recomputed'),
                     onError: (e) =>
                       toast.error(e instanceof ApiError ? e.message : 'Recompute failed'),
                   })
                 }
                 disabled={recompute.isPending}
+                title="Re-evaluates every line against policy and refreshes the settlement totals"
               >
-                {recompute.isPending ? 'Checking…' : 'Run policy check'}
+                {recompute.isPending ? 'Recomputing…' : 'Recompute claim'}
               </Button>
               <Button
                 variant="primary"
@@ -158,6 +230,56 @@ export function TripWorkspacePage() {
           ) : null
         }
       />
+
+      {editTripOpen ? (
+        <EditTripModal
+          trip={d.trip}
+          saving={updateTrip.isPending}
+          error={updateTrip.error}
+          onClose={() => setEditTripOpen(false)}
+          onSave={(body) =>
+            updateTrip.mutate(body, {
+              onSuccess: () => {
+                toast.success('Trip details updated');
+                setEditTripOpen(false);
+              },
+            })
+          }
+        />
+      ) : null}
+
+      {deleteConfirmOpen ? (
+        <div className="modal-overlay" onClick={() => setDeleteConfirmOpen(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">Delete {d.trip.travelRequestId}?</span>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm btn--icon"
+                onClick={() => setDeleteConfirmOpen(false)}
+              >
+                <Icon.Close size={16} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <Notice tone="warn">
+                This permanently removes the trip and everything under it — documents, claim
+                lines, and the settlement. This can&rsquo;t be undone.
+              </Notice>
+            </div>
+            <div className="modal-footer">
+              <Button variant="secondary" onClick={() => setDeleteConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={doDelete} disabled={deleteTrip.isPending}>
+                {deleteTrip.isPending ? 'Deleting…' : 'Delete trip'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <TripProgressTracker trip={d.trip} approvals={d.approvals} />
 
       {canEdit && blockers.length > 0 ? (
         <Notice tone="warn">
@@ -201,61 +323,83 @@ export function TripWorkspacePage() {
         </div>
       ) : null}
 
-      {tab === 'claim' ? (
-        <div className="u-col u-gap-4">
-          <Card>
-            <CardHeader
-              title={`Inbox (${d.documents.length})`}
-              actions={
-                canEdit ? (
-                  <>
-                    <input
-                      ref={fileInput}
-                      type="file"
-                      multiple
-                      accept=".eml,message/rfc822,image/*,application/pdf"
-                      hidden
-                      onChange={onPickFiles}
-                    />
-                    <Button
-                      onClick={() => fileInput.current?.click()}
-                      disabled={ingest.isPending}
-                    >
-                      {ingest.isPending ? 'Ingesting…' : 'Upload emails / receipts'}
-                    </Button>
-                  </>
-                ) : null
+      {tab === 'documents' ? (
+        <Card>
+          <CardHeader
+            title={`Documents (${d.documents.length})`}
+            actions={
+              canEdit ? (
+                <>
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    multiple
+                    accept=".eml,message/rfc822,image/*,application/pdf"
+                    hidden
+                    onChange={onPickFiles}
+                  />
+                  <Button
+                    onClick={() => fileInput.current?.click()}
+                    disabled={ingest.isPending}
+                  >
+                    {ingest.isPending ? 'Ingesting…' : 'Upload emails / receipts'}
+                  </Button>
+                </>
+              ) : null
+            }
+          />
+          <CardBody>
+            <ClaimChecklist documents={d.documents} claimLines={d.claimLines} settlement={d.settlement} />
+            <DocumentsList
+              grid
+              tripId={d.trip.id}
+              documents={d.documents}
+              claimLines={d.claimLines}
+              removingId={removeDocument.isPending ? removeDocument.variables : null}
+              onRemove={
+                canEdit
+                  ? (docId) =>
+                      removeDocument.mutate(docId, {
+                        onSuccess: () => toast.success('Document removed'),
+                        onError: (e) =>
+                          toast.error(
+                            e instanceof ApiError ? e.message : 'Could not remove the document',
+                          ),
+                      })
+                  : undefined
               }
             />
-            <CardBody>
-              <DocumentsList
-                grid
-                documents={d.documents}
-                claimLines={d.claimLines}
-                removingId={removeDocument.isPending ? removeDocument.variables : null}
-                onRemove={
-                  canEdit
-                    ? (docId) =>
-                        removeDocument.mutate(docId, {
-                          onSuccess: () => toast.success('Document removed'),
-                          onError: (e) =>
-                            toast.error(
-                              e instanceof ApiError ? e.message : 'Could not remove the document',
-                            ),
-                        })
-                    : undefined
-                }
-              />
-            </CardBody>
-          </Card>
-          <Card>
-            <CardHeader title={`Claim lines (${d.claimLines.length})`} />
-            <CardBody flush>
-              <ClaimLinesTable
-                lines={d.claimLines}
-                renderActions={
-                  canEdit
-                    ? (line) => (
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {tab === 'claim-lines' ? (
+        <Card>
+          <CardHeader
+            title={`Claim lines (${d.claimLines.length})`}
+            actions={
+              canEdit ? (
+                <Button size="sm" variant="secondary" onClick={() => setLineModal({ mode: 'add' })}>
+                  <Icon.Plus size={14} /> Add line manually
+                </Button>
+              ) : null
+            }
+          />
+          <CardBody flush>
+            <ClaimLinesTable
+              lines={d.claimLines}
+              renderActions={
+                canEdit
+                  ? (line) => (
+                      <span className="u-row u-gap-1">
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          title="Edit this line"
+                          onClick={() => setLineModal({ mode: 'edit', line })}
+                        >
+                          Edit
+                        </button>
                         <button
                           type="button"
                           className="btn btn--ghost btn--sm btn--icon"
@@ -273,13 +417,46 @@ export function TripWorkspacePage() {
                         >
                           <Icon.Close size={14} />
                         </button>
-                      )
-                    : undefined
-                }
-              />
-            </CardBody>
-          </Card>
-        </div>
+                      </span>
+                    )
+                  : undefined
+              }
+            />
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {lineModal ? (
+        <ClaimLineFormModal
+          line={lineModal.mode === 'edit' ? lineModal.line : null}
+          saving={addLine.isPending || editLine.isPending}
+          error={lineModal.mode === 'add' ? addLine.error : editLine.error}
+          onClose={() => setLineModal(null)}
+          onSave={(body) => {
+            if (lineModal.mode === 'add') {
+              addLine.mutate(body, {
+                onSuccess: () => {
+                  toast.success('Line added');
+                  setLineModal(null);
+                },
+                onError: (e) =>
+                  toast.error(e instanceof ApiError ? e.message : 'Could not add the line'),
+              });
+            } else {
+              editLine.mutate(
+                { lineId: lineModal.line.id, body },
+                {
+                  onSuccess: () => {
+                    toast.success('Line updated');
+                    setLineModal(null);
+                  },
+                  onError: (e) =>
+                    toast.error(e instanceof ApiError ? e.message : 'Could not update the line'),
+                },
+              );
+            }
+          }}
+        />
       ) : null}
 
       {tab === 'settlement' ? (
@@ -290,7 +467,7 @@ export function TripWorkspacePage() {
               <SettlementSummary s={d.settlement} />
             ) : (
               <EmptyState title="Not computed yet">
-                Run the policy check to produce the settlement summary.
+                Recompute the claim to produce the settlement summary.
               </EmptyState>
             )}
           </CardBody>

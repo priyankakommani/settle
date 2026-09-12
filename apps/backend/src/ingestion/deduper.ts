@@ -3,7 +3,8 @@ import type { ExtractedItem } from './types.js';
 
 export interface DedupResult {
   kept: ExtractedItem[];
-  duplicates: { item: ExtractedItem; duplicateOfReference: string | null }[];
+  /** `priorItem` is the earlier item this one collapsed into — callers use it to trace back to the original's source document. */
+  duplicates: { item: ExtractedItem; priorItem: ExtractedItem }[];
 }
 
 /**
@@ -30,7 +31,7 @@ export function dedupe(items: ExtractedItem[]): DedupResult {
 
     const prior = seenByKey.get(key) ?? (refKey ? seenByRef.get(refKey) : undefined);
     if (prior) {
-      duplicates.push({ item, duplicateOfReference: prior.reference ?? prior.merchant ?? null });
+      duplicates.push({ item, priorItem: prior });
       continue;
     }
 

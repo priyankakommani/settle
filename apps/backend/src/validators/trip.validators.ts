@@ -28,6 +28,10 @@ export const createTripSchema = z.object({
 
 export type CreateTripInput = z.infer<typeof createTripSchema>;
 
+/** Same shape as create — the edit form resends the whole trip request, not a partial patch. */
+export const updateTripSchema = createTripSchema;
+export type UpdateTripInput = z.infer<typeof updateTripSchema>;
+
 export const listTripsQuerySchema = z.object({
   status: z.string().optional(),
 });

@@ -1,4 +1,4 @@
-import { request } from './client.js';
+import { request, requestFile } from './client.js';
 import type {
   ClaimLine,
   AnalyticsOverview,
@@ -59,6 +59,9 @@ export const tripsApi = {
   listMine: () => request<TripSummary[]>('/trips'),
   get: (id: string) => request<TripDetail>(`/trips/${id}`),
   create: (body: CreateTripBody) => request<TripSummary>('/trips', { method: 'POST', body }),
+  update: (id: string, body: CreateTripBody) =>
+    request<TripDetail>(`/trips/${id}`, { method: 'PATCH', body }),
+  remove: (id: string) => request<{ removed: string }>(`/trips/${id}`, { method: 'DELETE' }),
   ingest: (id: string, form: FormData) =>
     request<IngestResult>(`/trips/${id}/documents`, { method: 'POST', form }),
   removeDocument: (id: string, docId: string) =>
@@ -68,6 +71,11 @@ export const tripsApi = {
   submit: (id: string) => request<TripDetail>(`/trips/${id}/submit`, { method: 'POST' }),
   addLine: (id: string, body: ClaimLineBody) =>
     request<ClaimLine>(`/trips/${id}/claim-lines`, { method: 'POST', body }),
+  /** The original uploaded file: the raw .eml, or the bare image/PDF as uploaded. */
+  documentFile: (id: string, docId: string) => requestFile(`/trips/${id}/documents/${docId}/raw`),
+  /** One attachment's original bytes (e.g. an image embedded in an .eml). */
+  attachmentFile: (id: string, attachmentId: string) =>
+    requestFile(`/trips/${id}/attachments/${attachmentId}/raw`),
 };
 
 export const claimLinesApi = {

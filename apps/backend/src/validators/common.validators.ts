@@ -7,6 +7,11 @@ export const tripDocParam = z.object({
   docId: z.string().uuid('must be a UUID'),
 });
 
+export const tripAttachmentParam = z.object({
+  id: z.string().uuid('must be a UUID'),
+  attachmentId: z.string().uuid('must be a UUID'),
+});
+
 export const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD');

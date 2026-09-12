@@ -121,6 +121,8 @@ export interface TripDocument {
   isNoise: boolean;
   isDuplicateOf: string | null;
   attachments: TripDocumentAttachment[];
+  /** Parsed email/OCR output kept for replay — `textBody` is the body text (or, for a bare image upload, its OCR text). */
+  parsedJson: { textBody?: string | null } | null;
 }
 
 export interface ClaimLine {
@@ -139,6 +141,17 @@ export interface ClaimLine {
   disallowedAmount: string;
   reasonText: string | null;
   proofRef: string | null;
+  editedByUser: boolean;
+  policyMeta: {
+    originalExtraction?: {
+      category: string;
+      merchant: string | null;
+      lineDate: string | null;
+      currency: string;
+      grossAmount: string;
+    };
+    [key: string]: unknown;
+  } | null;
 }
 
 export interface Settlement {

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { tripsApi, claimLinesApi } from '../../api/endpoints.js';
+import { tripsApi, claimLinesApi, type ClaimLineBody, type CreateTripBody } from '../../api/endpoints.js';
 import type { TripDetail } from '../../api/types.js';
 
 export function tripDetailKey(id: string) {
@@ -30,6 +30,20 @@ export function useTripAction(id: string) {
   };
 
   return {
+    updateTrip: useMutation({
+      mutationFn: (body: CreateTripBody) => tripsApi.update(id, body),
+      onSuccess: (d) => {
+        seed(d);
+        qc.invalidateQueries({ queryKey: ['trips'] });
+      },
+    }),
+    deleteTrip: useMutation({
+      mutationFn: () => tripsApi.remove(id),
+      onSuccess: () => {
+        qc.removeQueries({ queryKey: tripDetailKey(id) });
+        qc.invalidateQueries({ queryKey: ['trips'] });
+      },
+    }),
     ingest: useMutation({
       mutationFn: (files: File[]) => {
         const form = new FormData();
@@ -44,6 +58,15 @@ export function useTripAction(id: string) {
     }),
     removeLine: useMutation({
       mutationFn: (lineId: string) => claimLinesApi.remove(lineId),
+      onSuccess: refetchDetail,
+    }),
+    addLine: useMutation({
+      mutationFn: (body: ClaimLineBody) => tripsApi.addLine(id, body),
+      onSuccess: refetchDetail,
+    }),
+    editLine: useMutation({
+      mutationFn: ({ lineId, body }: { lineId: string; body: Partial<ClaimLineBody> }) =>
+        claimLinesApi.update(lineId, body),
       onSuccess: refetchDetail,
     }),
     recompute: useMutation({

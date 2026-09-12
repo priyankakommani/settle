@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { currentUser } from '../middleware/current-user.js';
 import { validate } from '../middleware/validate.js';
-import { uuidParam, tripDocParam } from '../validators/common.validators.js';
-import { createTripSchema } from '../validators/trip.validators.js';
+import { uuidParam, tripDocParam, tripAttachmentParam } from '../validators/common.validators.js';
+import { createTripSchema, updateTripSchema } from '../validators/trip.validators.js';
 import { tripsController } from '../controllers/trips.controller.js';
 import { claimLinesController } from '../controllers/claim-lines.controller.js';
 import { addClaimLineSchema } from '../validators/claim-line.validators.js';
@@ -17,7 +17,24 @@ export const tripRoutes = new Hono()
   .get('/', tripsController.listMine)
   .post('/', validate('json', createTripSchema), tripsController.create)
   .get('/:id', validate('param', uuidParam), tripsController.getOne)
+  .patch(
+    '/:id',
+    validate('param', uuidParam),
+    validate('json', updateTripSchema),
+    tripsController.update,
+  )
+  .delete('/:id', validate('param', uuidParam), tripsController.remove)
   .post('/:id/documents', validate('param', uuidParam), tripsController.ingest)
+  .get(
+    '/:id/documents/:docId/raw',
+    validate('param', tripDocParam),
+    tripsController.downloadDocument,
+  )
+  .get(
+    '/:id/attachments/:attachmentId/raw',
+    validate('param', tripAttachmentParam),
+    tripsController.downloadAttachment,
+  )
   .delete(
     '/:id/documents/:docId',
     validate('param', tripDocParam),

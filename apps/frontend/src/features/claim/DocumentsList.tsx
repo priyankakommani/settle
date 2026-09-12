@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ClaimLine, TripDocument, TripDocumentAttachment } from '../../api/types.js';
+import { tripsApi } from '../../api/endpoints.js';
+import { deriveDocStatus } from './docStatus.js';
 import { Badge, Button, EmptyState, Notice, cx } from '../../ui/primitives.js';
 import { VerdictTag } from '../../ui/domain.js';
 import { Icon } from '../../ui/icons.js';
@@ -33,65 +35,116 @@ const OCR_STATUS: Record<string, { label: string; tone: 'ok' | 'warn' | 'neutral
   pending: { label: 'Not processed yet', tone: 'neutral' },
 };
 
-interface DocStatus {
-  tone: 'ok' | 'warn' | 'info' | 'neutral';
-  label: string;
-  detail: string;
+/**
+ * window.open(blobUrl) forces a download in Chrome/Edge — the new tab has no
+ * access to the blob that created it. A direct <a> click navigates the tab
+ * itself, so the browser renders it inline instead.
+ */
+function openInNewTab(url: string) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
-/** A clear, honest explanation of what happened to this document — for both the uploader and whoever reviews it later. */
-function deriveStatus(doc: TripDocument, claimLines: ClaimLine[], allDocs: TripDocument[]): DocStatus {
-  if (doc.isDuplicateOf) {
-    const original = allDocs.find((d) => d.id === doc.isDuplicateOf);
-    return {
-      tone: 'neutral',
-      label: 'Duplicate',
-      detail: original
-        ? `Matches an expense already captured from "${original.subject ?? 'another document'}" — not double-counted.`
-        : 'Matches an expense already captured from another document — not double-counted.',
+type AttachmentPreviewState =
+  | { status: 'loading' }
+  | { status: 'ready'; url: string; mime: string }
+  | { status: 'unavailable' };
+
+/** Loads one attachment's bytes as soon as the card renders, so the file is visible without an extra click. */
+function useAttachmentPreview(tripId: string, attachmentId: string): AttachmentPreviewState {
+  const [state, setState] = useState<AttachmentPreviewState>({ status: 'loading' });
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setState({ status: 'loading' });
+    tripsApi
+      .attachmentFile(tripId, attachmentId)
+      .then((file) => {
+        if (cancelled) {
+          URL.revokeObjectURL(file.url);
+          return;
+        }
+        objectUrl = file.url;
+        setState({ status: 'ready', url: file.url, mime: file.mime });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: 'unavailable' });
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
+  }, [tripId, attachmentId]);
+
+  return state;
+}
+
+/** The card's header block: the receipt image itself filling the frame, or a big icon tile for email/manual entries. */
+function DocThumb({ tripId, doc }: { tripId: string; doc: TripDocument }) {
+  const firstAttachment = doc.attachments[0];
+  const canPreview = doc.sourceType === 'image' && Boolean(firstAttachment);
+  return canPreview ? (
+    <DocThumbImage tripId={tripId} attachmentId={firstAttachment!.id} />
+  ) : (
+    <div className={cx('doc-card__thumb-icon', `doc-card__thumb-icon--${doc.sourceType}`)}>
+      {doc.sourceType === 'eml' ? <Icon.Inbox size={28} /> : <Icon.File size={28} />}
+    </div>
+  );
+}
+
+function DocThumbImage({ tripId, attachmentId }: { tripId: string; attachmentId: string }) {
+  const preview = useAttachmentPreview(tripId, attachmentId);
+  if (preview.status === 'ready' && preview.mime.startsWith('image/')) {
+    return <img src={preview.url} alt="" />;
   }
-  if (doc.isNoise) {
-    return {
-      tone: 'neutral',
-      label: 'Ignored',
-      detail: 'Classified as promotional mail or a failed-payment notice — not a real expense or trip event.',
-    };
-  }
-  const produced = claimLines.filter((l) => l.sourceDocumentId === doc.id);
-  if (produced.length > 0) {
-    return {
-      tone: 'ok',
-      label: `${produced.length} claim line${produced.length > 1 ? 's' : ''}`,
-      detail: `Automatically produced ${produced.length} claim line${produced.length > 1 ? 's' : ''} from this document.`,
-    };
-  }
-  switch (doc.category) {
-    case 'travel_approval':
-      return {
-        tone: 'info',
-        label: 'Trip context',
-        detail: "Used to fill in the trip's dates/destination/approver — not a claim line by itself.",
-      };
-    case 'advance':
-      return {
-        tone: 'info',
-        label: 'Advance applied',
-        detail: "Updated the trip's advance amount/reference — not a claim line by itself.",
-      };
-    case 'hotel_booking':
-      return {
-        tone: 'info',
-        label: 'Booking only',
-        detail: 'A "pay at hotel" confirmation, not proof of payment — the hotel\'s tax invoice produces the actual lodging line.',
-      };
-    default:
-      return {
-        tone: 'warn',
-        label: 'No claim line',
-        detail: "Couldn't automatically read an amount/category from this document — check the attachment preview below, then add the expense manually.",
-      };
-  }
+  return (
+    <div className="doc-card__thumb-icon">
+      <Icon.File size={28} />
+    </div>
+  );
+}
+
+/** A block of extracted text with expand/collapse past 300 chars — shared by attachment OCR text and email body previews. */
+function TextPreview({ text, label }: { text: string; label: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > 300;
+  const shown = expanded || !isLong ? text : `${text.slice(0, 300)}…`;
+  return (
+    <div>
+      <div className="policy-guide__label" style={{ marginBottom: 4 }}>{label}</div>
+      <pre
+        style={{
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 12,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-sm)',
+          padding: 8,
+          margin: 0,
+        }}
+      >
+        {shown}
+      </pre>
+      {isLong ? (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          style={{ marginTop: 4 }}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? 'Show less' : 'Show full text'}
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 function formatBytes(n: number | null): string {
@@ -101,12 +154,12 @@ function formatBytes(n: number | null): string {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function AttachmentPreview({ att }: { att: TripDocumentAttachment }) {
-  const [expanded, setExpanded] = useState(false);
+function AttachmentPreview({ att, tripId }: { att: TripDocumentAttachment; tripId: string }) {
   const status = OCR_STATUS[att.ocrStatus] ?? { label: att.ocrStatus, tone: 'neutral' as const };
   const text = att.ocrText ?? '';
-  const isLong = text.length > 300;
-  const shown = expanded || !isLong ? text : `${text.slice(0, 300)}…`;
+  const preview = useAttachmentPreview(tripId, att.id);
+  const isImage = preview.status === 'ready' && preview.mime.startsWith('image/');
+  const isPdf = preview.status === 'ready' && preview.mime === 'application/pdf';
 
   return (
     <div className="policy-guide" style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: 10 }}>
@@ -122,35 +175,19 @@ function AttachmentPreview({ att }: { att: TripDocumentAttachment }) {
         <span className="policy-guide__label">OCR result</span>
         <Badge tone={status.tone}>{status.label}</Badge>
       </div>
+
+      {preview.status === 'loading' && <Notice tone="info">Loading preview…</Notice>}
+      {isImage && <img className="doc-preview-img" src={preview.url} alt={att.filename} />}
+      {isPdf && <iframe className="doc-preview-frame" src={preview.url} title={att.filename} />}
+      {preview.status === 'ready' && !isImage && !isPdf && (
+        <Button size="sm" variant="secondary" onClick={() => openInNewTab(preview.url)}>
+          Open this file
+        </Button>
+      )}
+      {preview.status === 'unavailable' && <Notice tone="warn">Could not load a preview for this file.</Notice>}
+
       {text ? (
-        <div style={{ marginTop: 4 }}>
-          <div className="policy-guide__label" style={{ marginBottom: 4 }}>What the system read from this file</div>
-          <pre
-            style={{
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 12,
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
-              padding: 8,
-              margin: 0,
-            }}
-          >
-            {shown}
-          </pre>
-          {isLong ? (
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              style={{ marginTop: 4 }}
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? 'Show less' : 'Show full text'}
-            </button>
-          ) : null}
-        </div>
+        <TextPreview text={text} label="What the system read from this file" />
       ) : (
         <Notice tone="warn">No text could be read from this file.</Notice>
       )}
@@ -160,12 +197,14 @@ function AttachmentPreview({ att }: { att: TripDocumentAttachment }) {
 
 /** The ingested inbox for a trip. `grid` lays cards out in responsive columns. */
 export function DocumentsList({
+  tripId,
   documents,
   claimLines = [],
   onRemove,
   removingId,
   grid,
 }: {
+  tripId: string;
   documents: TripDocument[];
   claimLines?: ClaimLine[];
   onRemove?: (id: string) => void;
@@ -182,7 +221,7 @@ export function DocumentsList({
     );
   }
 
-  const selectedStatus = selectedDoc ? deriveStatus(selectedDoc, claimLines, documents) : null;
+  const selectedStatus = selectedDoc ? deriveDocStatus(selectedDoc, claimLines, documents) : null;
   const selectedLines = selectedDoc ? claimLines.filter((l) => l.sourceDocumentId === selectedDoc.id) : [];
 
   return (
@@ -190,20 +229,36 @@ export function DocumentsList({
       <ul className={cx('doc-list', grid && 'doc-list--grid')}>
         {documents.map((d) => {
           const dimmed = d.isNoise || Boolean(d.isDuplicateOf);
-          const status = deriveStatus(d, claimLines, documents);
+          const status = deriveDocStatus(d, claimLines, documents);
           const confidencePct = d.categoryConfidence ? Math.round(Number(d.categoryConfidence) * 100) : null;
           return (
             <li
               key={d.id}
-              className={cx('doc-item', dimmed && 'doc-item--dim')}
+              className={cx('doc-card', dimmed && 'doc-card--dim')}
               onClick={() => setSelectedDoc(d)}
-              style={{ cursor: 'pointer' }}
               title="Click to view document detail"
             >
-              <Icon.File size={16} />
-              <div className="doc-item__body">
-                <span className="doc-item__title">{d.subject ?? '(no subject)'}</span>
-                <span className="doc-item__meta">
+              <div className="doc-card__thumb">
+                <DocThumb tripId={tripId} doc={d} />
+                {onRemove ? (
+                  <button
+                    type="button"
+                    className="doc-card__remove"
+                    title="Remove this document"
+                    disabled={removingId === d.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemove(d.id);
+                    }}
+                  >
+                    <Icon.Close size={13} />
+                  </button>
+                ) : null}
+              </div>
+              <div className="doc-card__body">
+                <Badge tone={status.tone}>{status.label}</Badge>
+                <span className="doc-card__title">{d.subject ?? '(no subject)'}</span>
+                <span className="doc-card__meta">
                   {d.sourceType === 'eml' ? 'Email' : d.sourceType === 'image' ? 'Image upload' : 'Manual'}
                   {' · '}
                   {CATEGORY_LABEL[d.category] ?? d.category}
@@ -212,22 +267,15 @@ export function DocumentsList({
                   {d.sentAt ? ` · ${shortDate(d.sentAt)}` : ''}
                   {d.attachments.length > 0 ? ` · ${d.attachments.length} file${d.attachments.length > 1 ? 's' : ''}` : ''}
                 </span>
+                {(() => {
+                  const snippet = d.parsedJson?.textBody?.trim() || d.attachments.map((a) => a.ocrText).find(Boolean);
+                  return snippet ? (
+                    <span className="doc-card__snippet">
+                      {snippet.length > 160 ? `${snippet.slice(0, 160)}…` : snippet}
+                    </span>
+                  ) : null;
+                })()}
               </div>
-              <Badge tone={status.tone}>{status.label}</Badge>
-              {onRemove ? (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm btn--icon"
-                  title="Remove this document"
-                  disabled={removingId === d.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemove(d.id);
-                  }}
-                >
-                  <Icon.Close size={14} />
-                </button>
-              ) : null}
             </li>
           );
         })}
@@ -236,7 +284,7 @@ export function DocumentsList({
       {/* Document Detail Modal */}
       {selectedDoc && selectedStatus && (
         <div className="modal-overlay" onClick={() => setSelectedDoc(null)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-dialog modal-dialog--wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span className="modal-title">Ingested document</span>
               <button
@@ -274,15 +322,6 @@ export function DocumentsList({
                   <span>{shortDate(selectedDoc.createdAt)}</span>
                 </div>
                 <div className="policy-guide__item">
-                  <span className="policy-guide__label">Classified as</span>
-                  <span className="u-strong">
-                    {CATEGORY_LABEL[selectedDoc.category] ?? selectedDoc.category}
-                    {selectedDoc.categoryConfidence
-                      ? ` (${Math.round(Number(selectedDoc.categoryConfidence) * 100)}% confidence)`
-                      : ''}
-                  </span>
-                </div>
-                <div className="policy-guide__item">
                   <span className="policy-guide__label">What happened</span>
                   <Badge tone={selectedStatus.tone}>{selectedStatus.label}</Badge>
                 </div>
@@ -292,11 +331,18 @@ export function DocumentsList({
                 {selectedStatus.detail}
               </Notice>
 
+              {selectedDoc.sourceType === 'eml' &&
+                (selectedDoc.parsedJson?.textBody?.trim() ? (
+                  <TextPreview text={selectedDoc.parsedJson.textBody} label="Email content" />
+                ) : (
+                  <Notice tone="warn">No readable text could be extracted from this email.</Notice>
+                ))}
+
               {selectedDoc.attachments.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div className="policy-guide__label">Attached files ({selectedDoc.attachments.length})</div>
                   {selectedDoc.attachments.map((att) => (
-                    <AttachmentPreview key={att.id} att={att} />
+                    <AttachmentPreview key={att.id} att={att} tripId={tripId} />
                   ))}
                 </div>
               )}

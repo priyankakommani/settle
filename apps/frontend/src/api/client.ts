@@ -44,9 +44,8 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
-export async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
-
   try {
     const token = typeof window !== 'undefined' ? localStorage.getItem('settle.token') : null;
     if (token) {
@@ -55,6 +54,39 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
   } catch {
     /* ignore localStorage restriction */
   }
+  return headers;
+}
+
+/**
+ * Fetches a binary endpoint (e.g. an original uploaded file) with the same auth
+ * as `request`, and returns it as an object URL + its declared filename. Plain
+ * <a>/<img> tags can't carry the bearer-token header, so viewing/downloading a
+ * stored file has to go through an authenticated fetch instead of a bare URL.
+ * Caller is responsible for revoking the URL (`URL.revokeObjectURL`) when done.
+ */
+export async function requestFile(
+  path: string,
+): Promise<{ url: string; filename: string; mime: string }> {
+  const baseUrl = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+  const res = await fetch(`${baseUrl}/api${path}`, {
+    headers: authHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new ApiError(`Could not load file (${res.status})`, 'INTERNAL_ERROR', res.status, 'unknown');
+  }
+  const filename = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/
+    .exec(res.headers.get('content-disposition') ?? '')?.[1];
+  const blob = await res.blob();
+  return {
+    url: URL.createObjectURL(blob),
+    filename: filename ? decodeURIComponent(filename) : 'download',
+    mime: blob.type,
+  };
+}
+
+export async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = authHeaders();
 
   const method = opts.method ?? (opts.body !== undefined || opts.form ? 'POST' : 'GET');
 

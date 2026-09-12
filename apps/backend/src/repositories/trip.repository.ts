@@ -104,6 +104,15 @@ export const tripRepository = {
       throw mapDbError(err);
     }
   },
+
+  /** Cascades in the DB (approvals/claim_lines/raw_documents/settlements/audit/notifications) via FK onDelete. */
+  async remove(id: string): Promise<void> {
+    try {
+      await db.delete(trips).where(eq(trips.id, id));
+    } catch (err) {
+      throw mapDbError(err);
+    }
+  },
 };
 
 export type TripRepository = typeof tripRepository;

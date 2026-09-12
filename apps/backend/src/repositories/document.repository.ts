@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import {
   attachments,
   rawDocuments,
+  type Attachment,
   type NewAttachment,
   type NewRawDocument,
   type RawDocument,
@@ -41,6 +42,15 @@ export const documentRepository = {
     try {
       // attachments cascade via FK; claim_lines.source_document_id is set null
       await db.delete(rawDocuments).where(eq(rawDocuments.id, id));
+    } catch (err) {
+      throw mapDbError(err);
+    }
+  },
+
+  async findAttachmentById(id: string): Promise<Attachment | null> {
+    try {
+      const rows = await db.select().from(attachments).where(eq(attachments.id, id)).limit(1);
+      return rows[0] ?? null;
     } catch (err) {
       throw mapDbError(err);
     }

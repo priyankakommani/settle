@@ -1,5 +1,6 @@
-import { EmployeeRole, ErrorCode } from '@settle/shared';
-import { BadRequestError, ForbiddenError, NotFoundError } from '../lib/errors.js';
+import { EmployeeRole, ErrorCode, TripStatus } from '@settle/shared';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js';
+import { removeBlob } from '../lib/blob-storage.js';
 import { tripRepository } from '../repositories/trip.repository.js';
 import { employeeRepository } from '../repositories/employee.repository.js';
 import { claimLineRepository } from '../repositories/claim-line.repository.js';
@@ -61,11 +62,17 @@ export const tripService = {
    * becoming a cross-employee data leak.
    */
   async getDetailForViewer(id: string, viewer: Employee) {
+    const trip = await this.assertViewable(id, viewer);
+    return this.getDetail(trip.id);
+  },
+
+  /** Same access rule as `getDetailForViewer`, for endpoints that don't need the full aggregate. */
+  async assertViewable(id: string, viewer: Employee): Promise<Trip> {
     const trip = await this.getByIdOrThrow(id);
     if (!(await mayViewTrip(trip, viewer))) {
       throw new ForbiddenError('You do not have access to this travel request.', ErrorCode.FORBIDDEN);
     }
-    return this.getDetail(id);
+    return trip;
   },
 
   /**
@@ -120,6 +127,75 @@ export const tripService = {
 
     return tripRepository.create(row);
   },
+
+  /**
+   * Full replace of the trip-request fields (same shape as create) — the
+   * frontend resends the whole form, not a partial patch, so an omitted
+   * field means "cleared", matching how create treats `undefined`.
+   */
+  async updateForEmployee(tripId: string, actorCode: string, input: CreateTripInput): Promise<Trip> {
+    const trip = await this.getByIdOrThrow(tripId);
+    assertClaimant(trip, actorCode);
+    assertEditable(trip);
+
+    if (
+      input.advanceRequested != null &&
+      input.estimatedCost != null &&
+      input.advanceRequested > input.estimatedCost * 0.6 + 0.005
+    ) {
+      throw new BadRequestError(
+        'The advance requested cannot exceed 60% of the estimated cost (policy 1.2).',
+        ErrorCode.BAD_REQUEST,
+        {
+          estimatedCost: input.estimatedCost,
+          advanceRequested: input.advanceRequested,
+          maxAdvance: Math.round(input.estimatedCost * 0.6 * 100) / 100,
+        },
+      );
+    }
+
+    const fullDays = computeFullDays(input.startDate, input.endDate);
+
+    return tripRepository.update(tripId, {
+      purpose: input.purpose ?? null,
+      originCity: input.originCity ?? null,
+      destCity: input.destCity ?? null,
+      destTier: input.destTier ?? null,
+      isInternational:
+        input.isInternational === undefined ? null : String(input.isInternational),
+      startDate: input.startDate ?? null,
+      endDate: input.endDate ?? null,
+      fullDays,
+      estimatedCost: input.estimatedCost != null ? input.estimatedCost.toFixed(2) : null,
+      advanceRequested: input.advanceRequested != null ? input.advanceRequested.toFixed(2) : null,
+    });
+  },
+
+  /**
+   * Permanently removes a DRAFT trip and everything under it. Only DRAFT —
+   * once submitted the trip is part of someone else's approval/finance
+   * workflow, so it can be returned but never simply deleted.
+   */
+  async deleteForEmployee(tripId: string, actorCode: string): Promise<void> {
+    const trip = await this.getByIdOrThrow(tripId);
+    assertClaimant(trip, actorCode);
+    if (trip.status !== TripStatus.DRAFT) {
+      throw new ConflictError(
+        `A trip in state ${trip.status} cannot be deleted — only a DRAFT trip can be removed.`,
+        ErrorCode.CLAIM_NOT_EDITABLE,
+      );
+    }
+
+    // Clean up on-disk blobs before the DB cascade removes the rows that reference them.
+    const docs = await documentRepository.listByTrip(tripId);
+    const attachmentLists = await Promise.all(docs.map((d) => documentRepository.listAttachments(d.id)));
+    await Promise.all([
+      ...docs.map((d) => removeBlob(d.rawBlobRef)),
+      ...attachmentLists.flat().map((a) => removeBlob(a.blobRef)),
+    ]);
+
+    await tripRepository.remove(tripId);
+  },
 };
 
 export type TripService = typeof tripService;
@@ -143,4 +219,19 @@ async function mayViewTrip(trip: Trip, viewer: Employee): Promise<boolean> {
 
   const chain = await approvalRepository.listByTrip(trip.id);
   return chain.some((step) => step.approverCode === viewer.empCode);
+}
+
+function assertClaimant(trip: { employeeCode: string }, actorCode: string): void {
+  if (trip.employeeCode !== actorCode) {
+    throw new ForbiddenError('Only the claimant can change this trip.', ErrorCode.FORBIDDEN);
+  }
+}
+
+function assertEditable(trip: { status: string }): void {
+  if (trip.status !== TripStatus.DRAFT && trip.status !== TripStatus.RETURNED) {
+    throw new ConflictError(
+      `The trip request can only change while the trip is DRAFT or RETURNED (currently ${trip.status}).`,
+      ErrorCode.CLAIM_NOT_EDITABLE,
+    );
+  }
 }

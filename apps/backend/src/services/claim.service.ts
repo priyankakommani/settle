@@ -81,9 +81,26 @@ export const claimService = {
     if (patch.paidBy !== undefined) next.paidBy = patch.paidBy;
     if (patch.sourceDocumentId !== undefined) next.sourceDocumentId = patch.sourceDocumentId ?? null;
     if (patch.proofRef !== undefined) next.proofRef = patch.proofRef ?? null;
-    if (patch.meta !== undefined) {
-      next.policyMeta = { ...(asObject(line.policyMeta)), ...(patch.meta ?? {}) };
-    }
+
+    const baseMeta = asObject(line.policyMeta);
+    // First hand-edit of a machine-extracted line: snapshot what the pipeline
+    // originally read, so an approver sees "claimant changed X -> Y" against a
+    // real reference point instead of just a bare "edited by user" flag.
+    const snapshot =
+      !line.editedByUser && baseMeta.originalExtraction === undefined
+        ? {
+            category: line.category,
+            merchant: line.merchant,
+            lineDate: line.lineDate,
+            currency: line.currency,
+            grossAmount: line.grossAmount,
+          }
+        : undefined;
+    next.policyMeta = {
+      ...baseMeta,
+      ...(patch.meta ?? {}),
+      ...(snapshot ? { originalExtraction: snapshot } : {}),
+    };
 
     const updated = await claimLineRepository.update(lineId, next);
     await this.recompute(line.tripId);

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { ClaimLine } from '../../api/types.js';
 import { Money, VerdictTag } from '../../ui/domain.js';
-import { Button, EmptyState } from '../../ui/primitives.js';
+import { Badge, Button, EmptyState } from '../../ui/primitives.js';
 import { Icon } from '../../ui/icons.js';
 import { shortDate } from '../../lib/format.js';
 
@@ -12,6 +12,14 @@ const CATEGORY_LABEL: Record<string, string> = {
   business_entertainment: 'Business entertainment',
   other: 'Other',
 };
+
+interface OriginalExtraction {
+  category: string;
+  merchant: string | null;
+  lineDate: string | null;
+  currency: string;
+  grossAmount: string;
+}
 
 interface SelectedProof {
   merchant: string;
@@ -24,6 +32,8 @@ interface SelectedProof {
   sourceDocumentId?: string | null;
   verdict: string;
   reasonText?: string | null;
+  editedByUser?: boolean;
+  originalExtraction?: OriginalExtraction;
 }
 
 /**
@@ -42,7 +52,7 @@ export function ClaimLinesTable({
   if (lines.length === 0) {
     return (
       <EmptyState icon={<Icon.Inbox size={20} />} title="No claim lines yet">
-        Add the trip's receipts, then run the policy check.
+        Add the trip's receipts — claim lines are built and recomputed automatically.
       </EmptyState>
     );
   }
@@ -71,11 +81,31 @@ export function ClaimLinesTable({
             const grossNum = typeof l.grossAmount === 'number' ? l.grossAmount : parseFloat(String(l.grossAmount || 0));
             const allowedNum = typeof l.allowedAmount === 'number' ? l.allowedAmount : parseFloat(String(l.allowedAmount || 0));
             const disallowedNum = typeof l.disallowedAmount === 'number' ? l.disallowedAmount : parseFloat(String(l.disallowedAmount || 0));
+            const originalExtraction = l.policyMeta?.originalExtraction;
+            const proofPayload: SelectedProof = {
+              merchant: merchantName,
+              category: CATEGORY_LABEL[l.category] ?? l.category,
+              lineDate: l.lineDate,
+              grossAmount: grossNum,
+              allowedAmount: allowedNum,
+              disallowedAmount: disallowedNum,
+              proofRef: l.proofRef,
+              sourceDocumentId: l.sourceDocumentId,
+              verdict: l.policyVerdict ?? 'allowed',
+              reasonText: l.reasonText,
+              editedByUser: l.editedByUser,
+              originalExtraction,
+            };
 
             return (
               <tr key={l.id} className={memoOnly ? 'table__row-strike' : undefined}>
                 <td className="table__cell--primary">
-                  <div className="u-strong">{merchantName}</div>
+                  <div className="u-strong" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {merchantName}
+                    {l.editedByUser && originalExtraction ? (
+                      <Badge tone="info">Edited</Badge>
+                    ) : null}
+                  </div>
                   <div className="u-subtle" style={{ fontSize: 'var(--fs-12)' }}>
                     {CATEGORY_LABEL[l.category] ?? l.category}
                     {showReason ? ` · ${l.reasonText}` : ''}
@@ -104,20 +134,7 @@ export function ClaimLinesTable({
                     <button
                       type="button"
                       className="proof-pill proof-pill--ref"
-                      onClick={() =>
-                        setSelectedProof({
-                          merchant: merchantName,
-                          category: CATEGORY_LABEL[l.category] ?? l.category,
-                          lineDate: l.lineDate,
-                          grossAmount: grossNum,
-                          allowedAmount: allowedNum,
-                          disallowedAmount: disallowedNum,
-                          proofRef: l.proofRef,
-                          sourceDocumentId: l.sourceDocumentId,
-                          verdict: l.policyVerdict ?? 'allowed',
-                          reasonText: l.reasonText,
-                        })
-                      }
+                      onClick={() => setSelectedProof(proofPayload)}
                       title="Click to view proof document detail"
                     >
                       <Icon.File size={12} />
@@ -127,19 +144,7 @@ export function ClaimLinesTable({
                     <button
                       type="button"
                       className="proof-pill proof-pill--email"
-                      onClick={() =>
-                        setSelectedProof({
-                          merchant: merchantName,
-                          category: CATEGORY_LABEL[l.category] ?? l.category,
-                          lineDate: l.lineDate,
-                          grossAmount: grossNum,
-                          allowedAmount: allowedNum,
-                          disallowedAmount: disallowedNum,
-                          sourceDocumentId: l.sourceDocumentId,
-                          verdict: l.policyVerdict ?? 'allowed',
-                          reasonText: l.reasonText,
-                        })
-                      }
+                      onClick={() => setSelectedProof(proofPayload)}
                       title="Click to view email proof detail"
                     >
                       <Icon.Inbox size={12} />
@@ -207,6 +212,23 @@ export function ClaimLinesTable({
               {selectedProof.reasonText && (
                 <div className="banner banner--warn" style={{ marginTop: 4, fontSize: 'var(--fs-12)' }}>
                   {selectedProof.reasonText}
+                </div>
+              )}
+
+              {selectedProof.editedByUser && selectedProof.originalExtraction && (
+                <div style={{ marginTop: 4 }}>
+                  <Badge tone="info">Edited by claimant</Badge>
+                  <div className="policy-guide" style={{ marginTop: 6 }}>
+                    <div className="policy-guide__item">
+                      <span className="policy-guide__label">Originally read from document</span>
+                      <span className="u-mono">
+                        {CATEGORY_LABEL[selectedProof.originalExtraction.category] ?? selectedProof.originalExtraction.category}
+                        {selectedProof.originalExtraction.merchant ? ` · ${selectedProof.originalExtraction.merchant}` : ''}
+                        {' · '}
+                        {selectedProof.originalExtraction.currency} {selectedProof.originalExtraction.grossAmount}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
