@@ -31,12 +31,16 @@ export const approvalRepository = {
     }
   },
 
-  async listByApprover(approverCode: string, decision: ApprovalDecision = 'pending'): Promise<Approval[]> {
+  async listByApprover(approverCode: string, decision?: ApprovalDecision): Promise<Approval[]> {
     try {
+      const conditions = [eq(approvals.approverCode, approverCode)];
+      if (decision) {
+        conditions.push(eq(approvals.decision, decision));
+      }
       return await db
         .select()
         .from(approvals)
-        .where(and(eq(approvals.approverCode, approverCode), eq(approvals.decision, decision)))
+        .where(and(...conditions))
         .orderBy(asc(approvals.level));
     } catch (err) {
       throw mapDbError(err);

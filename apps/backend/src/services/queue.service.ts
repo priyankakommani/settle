@@ -33,32 +33,58 @@ export interface QueueRow {
  */
 export const queueService = {
   async pendingApprovalsFor(approverCode: string): Promise<QueueRow[]> {
-    const mySteps = await approvalRepository.listByApprover(approverCode, ApprovalDecision.PENDING);
-    const matched: Array<{ trip: Trip; level: number }> = [];
+    const mySteps = await approvalRepository.listByApprover(approverCode);
+    const pendingMatched: Array<{ trip: Trip; level: number }> = [];
+    const completedMatched: Array<{ trip: Trip; level: number }> = [];
+
+    const seenTripIds = new Set<string>();
 
     for (const step of mySteps) {
       if (step.role === EmployeeRole.FINANCE) continue;
+      if (seenTripIds.has(step.tripId)) continue;
+      seenTripIds.add(step.tripId);
+
       const trip = await tripRepository.findById(step.tripId);
-      if (!trip || trip.status !== TripStatus.PENDING_APPROVAL) continue;
+      if (!trip) continue;
 
       const chain = await approvalRepository.listByTrip(step.tripId);
       const lowestPending = chain
         .filter((s) => s.role !== EmployeeRole.FINANCE && s.decision === ApprovalDecision.PENDING)
         .sort((a, b) => a.level - b.level)[0];
-      if (!lowestPending || lowestPending.level !== step.level) continue;
 
-      matched.push({ trip, level: step.level });
+      if (
+        trip.status === TripStatus.PENDING_APPROVAL &&
+        lowestPending &&
+        lowestPending.level === step.level
+      ) {
+        pendingMatched.push({ trip, level: step.level });
+      } else {
+        completedMatched.push({ trip, level: step.level });
+      }
     }
 
-    const levelByTrip = new Map(matched.map((m) => [m.trip.id, m.level]));
+    const tripTime = (t: Trip) => new Date(t.updatedAt ?? t.submittedAt ?? t.createdAt).getTime();
+
+    pendingMatched.sort((a, b) => tripTime(b.trip) - tripTime(a.trip));
+    completedMatched.sort((a, b) => tripTime(b.trip) - tripTime(a.trip));
+
+    const allMatched = [...pendingMatched, ...completedMatched];
+    const levelByTrip = new Map(allMatched.map((m) => [m.trip.id, m.level]));
     return toRows(
-      matched.map((m) => m.trip),
+      allMatched.map((m) => m.trip),
       (tripId) => levelByTrip.get(tripId) ?? null,
     );
   },
 
   async pendingFinance(): Promise<QueueRow[]> {
-    const trips = await tripRepository.listByStatus(TripStatus.PENDING_FINANCE, TripStatus.VERIFIED);
+    const trips = await tripRepository.listByStatus(
+      TripStatus.PENDING_FINANCE,
+      TripStatus.VERIFIED,
+      TripStatus.PAID,
+      TripStatus.RETURNED,
+    );
+    const tripTime = (t: Trip) => new Date(t.updatedAt ?? t.submittedAt ?? t.createdAt).getTime();
+    trips.sort((a, b) => tripTime(b) - tripTime(a));
     return toRows(trips);
   },
 

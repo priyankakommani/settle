@@ -86,6 +86,9 @@ export const notificationService = {
     const { trip, chain, decidedLevel, decision, nextStatus, remarks } = params;
 
     if (decision === ApprovalDecision.APPROVED) {
+      const step = chain.find((s) => s.level === decidedLevel);
+      const roleName = step?.role ? step.role.toLowerCase() : 'approver';
+
       if (nextStatus === TripStatus.PENDING_FINANCE) {
         const fin = financeStep(chain);
         await safeEmit([
@@ -96,6 +99,14 @@ export const notificationService = {
             body: 'All business approvals are complete. Finance verification is pending.',
             tripId: trip.id,
             link: `/finance/${trip.id}`,
+          },
+          {
+            recipientCode: trip.employeeCode,
+            type: 'claim_approved',
+            title: `Claim approved by ${roleName} — ${trip.travelRequestId}`,
+            body: `Your claim was approved by ${roleName} and has moved to Finance for verification.`,
+            tripId: trip.id,
+            link: `/trips/${trip.id}?tab=approvals`,
           },
         ]);
         return;
@@ -110,6 +121,14 @@ export const notificationService = {
             body: `Approved at the previous level. Now with ${next.role.toLowerCase()}.`,
             tripId: trip.id,
             link: `/approvals/${trip.id}`,
+          },
+          {
+            recipientCode: trip.employeeCode,
+            type: 'claim_approved',
+            title: `Claim approved by ${roleName} — ${trip.travelRequestId}`,
+            body: `Your claim was approved by ${roleName} and moved to ${next.role.toLowerCase()} for approval.`,
+            tripId: trip.id,
+            link: `/trips/${trip.id}?tab=approvals`,
           },
         ]);
       }

@@ -61,7 +61,7 @@ export const tripRepository = {
 
   async listAll(): Promise<Trip[]> {
     try {
-      return await db.select().from(trips).orderBy(desc(trips.createdAt));
+      return await db.select().from(trips).orderBy(desc(trips.updatedAt));
     } catch (err) {
       throw mapDbError(err);
     }
@@ -73,7 +73,7 @@ export const tripRepository = {
         .select()
         .from(trips)
         .where(eq(trips.employeeCode, employeeCode))
-        .orderBy(desc(trips.createdAt));
+        .orderBy(desc(trips.updatedAt));
     } catch (err) {
       throw mapDbError(err);
     }
@@ -86,7 +86,7 @@ export const tripRepository = {
         .select()
         .from(trips)
         .where(inArray(trips.status, statuses))
-        .orderBy(desc(trips.submittedAt));
+        .orderBy(desc(trips.updatedAt));
     } catch (err) {
       throw mapDbError(err);
     }

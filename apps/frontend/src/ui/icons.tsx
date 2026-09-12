@@ -238,5 +238,11 @@ export const Icon = {
       <path d="m3 16.7 9 4.9 9-4.9" />
     </Base>
   ),
+  Search: (p: IconProps) => (
+    <Base {...p}>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.35-4.35" />
+    </Base>
+  ),
 };
 
