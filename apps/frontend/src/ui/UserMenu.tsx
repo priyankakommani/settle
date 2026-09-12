@@ -58,9 +58,7 @@ export function UserMenu({ placement = 'down' }: { placement?: 'up' | 'down' }) 
             <span className="rolebadge">{badge}</span>
             <span className="u-subtle">{user.department}</span>
           </span>
-          <span className="u-subtle" style={{ fontSize: 'var(--fs-12)' }}>
-            {user.email}
-          </span>
+          <span className="usermenu__email">{user.email}</span>
         </div>
       </div>
       <div className="usermenu__sep" />

@@ -250,6 +250,14 @@
   font-size: var(--fs-13);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Email has no spaces to wrap on — without this it overflows the fixed-width
+   popover instead of breaking onto a second line. */
+.usermenu__email {
+  font-size: var(--fs-12);
+  color: var(--text-subtle);
+  overflow-wrap: anywhere;
 }
 .usermenu__trigger-role {
   font-size: var(--fs-11);
