@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isNull } from 'drizzle-orm';
@@ -63,6 +64,13 @@ async function seedDemoTrip(): Promise<void> {
     return;
   }
 
+  // The demo inbox is kept out of git; without it, skip the fixture trip.
+  const packDir = join(process.cwd(), 'seed-data', 'demo');
+  if (!existsSync(packDir)) {
+    logger.info({ packDir }, 'seed.demo_trip.skipped_no_demo_data');
+    return;
+  }
+
   const travelRequestId = await tripRepository.nextTravelRequestId();
   const trip = await tripRepository.create({
     travelRequestId,
@@ -79,7 +87,6 @@ async function seedDemoTrip(): Promise<void> {
     advanceRequested: '20000.00',
   });
 
-  const packDir = join(process.cwd(), 'seed-data', 'demo');
   const emailDir = join(packDir, 'sample_emails');
   const receiptDir = join(packDir, 'receipts');
   const emailNames = (await readdir(emailDir)).filter((name) => name.endsWith('.eml')).sort();
