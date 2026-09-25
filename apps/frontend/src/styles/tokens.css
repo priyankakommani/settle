@@ -1,0 +1,154 @@
+/*
+ * Design tokens. Every colour / space / radius / shadow used in the app
+ * resolves to one of these. Components never hard-code a hex value.
+ *
+ * Light is the default palette on :root. Dark overrides only the values that
+ * change — once for the OS setting (unless the user forced light) and once for
+ * an explicit [data-theme="dark"] so the in-app toggle wins either way.
+ */
+
+:root {
+  /* ---- surfaces & text ---- */
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --surface-3: #e8ebef;
+  --border: #e2e5ea;
+  --border-strong: #cfd4dc;
+
+  --text: #1b2430;
+  --text-muted: #5a6472;
+  --text-subtle: #8b95a2;
+  --text-on-accent: #ffffff;
+
+  /* ---- brand (green) ---- */
+  --accent: #1f7a3d;
+  --accent-hover: #1a6a35;
+  --accent-active: #15582b;
+  --accent-soft: #e6f3ea;
+  --accent-ring: rgba(31, 122, 61, 0.30);
+
+  /* ---- status ---- */
+  --ok: #1f8a54;
+  --ok-soft: #e6f4ec;
+  --warn: #a86a12;
+  --warn-soft: #fbf0dd;
+  --danger: #c0392f;
+  --danger-soft: #fbe9e7;
+  --info: #2f6feb;
+  --info-soft: #e9f1fe;
+  --neutral: #67707d;
+  --neutral-soft: #eceef1;
+
+  /* ---- type scale ---- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --fs-11: 0.6875rem;
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-22: 1.375rem;
+  --fs-28: 1.75rem;
+
+  /* ---- spacing ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* ---- radius ---- */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* ---- elevation (used sparingly) ---- */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.1), 0 2px 4px rgba(16, 24, 40, 0.06);
+
+  /* ---- layout ---- */
+  --nav-w: 244px;
+  --content-max: 1380px;
+
+  color-scheme: light;
+}
+
+/* dark palette — shared block, applied by both selectors below */
+:root[data-theme='dark'] {
+  --bg: #0f1319;
+  --surface: #161b22;
+  --surface-2: #1c232c;
+  --surface-3: #232c37;
+  --border: #2a323d;
+  --border-strong: #3a444f;
+
+  --text: #e7eaee;
+  --text-muted: #a3adba;
+  --text-subtle: #7b8592;
+
+  --accent: #3fae6c;
+  --accent-hover: #4bbd79;
+  --accent-active: #349158;
+  --accent-soft: #16281d;
+  --accent-ring: rgba(63, 174, 108, 0.40);
+
+  --ok: #3fb27f;
+  --ok-soft: #14271f;
+  --warn: #d29b4f;
+  --warn-soft: #2a2113;
+  --danger: #e2685c;
+  --danger-soft: #2c1613;
+  --info: #4c8dff;
+  --info-soft: #17253d;
+  --neutral: #8b95a2;
+  --neutral-soft: #212832;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0f1319;
+    --surface: #161b22;
+    --surface-2: #1c232c;
+    --surface-3: #232c37;
+    --border: #2a323d;
+    --border-strong: #3a444f;
+
+    --text: #e7eaee;
+    --text-muted: #a3adba;
+    --text-subtle: #7b8592;
+
+    --accent: #3fae6c;
+    --accent-hover: #4bbd79;
+    --accent-active: #349158;
+    --accent-soft: #16281d;
+    --accent-ring: rgba(63, 174, 108, 0.40);
+
+    --ok: #3fb27f;
+    --ok-soft: #14271f;
+    --warn: #d29b4f;
+    --warn-soft: #2a2113;
+    --danger: #e2685c;
+    --danger-soft: #2c1613;
+    --info: #4c8dff;
+    --info-soft: #17253d;
+    --neutral: #8b95a2;
+    --neutral-soft: #212832;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+
+    color-scheme: dark;
+  }
+}

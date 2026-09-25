@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+
+# storage & uploads
+apps/backend/.storage/
+.storage/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# test / coverage
+coverage/
+
+# drizzle throwaway
+apps/backend/drizzle/meta/_journal.bak
+
+# tesseract.js downloads its language model into the cwd on first OCR run
+*.traineddata
+
+# local scratch
+/extracted/
+/scratch/
+# demo inbox (emails, receipts, roster) — kept local only.
+# Place it in apps/backend/seed-data/demo/ before `pnpm db:seed`.
+apps/backend/seed-data
+

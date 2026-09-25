@@ -1,0 +1,1 @@
+ALTER TYPE "public"."employee_role" ADD VALUE 'Admin';
